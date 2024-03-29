@@ -34,11 +34,11 @@ func (t *LocalTransport) Addr() NetAddr {
 }
 
 // for now we are providing method for connecting local tranport to another local transport
-func (t *LocalTransport) Connect(tr *LocalTransport) error {
+func (t *LocalTransport) Connect(tr Transport) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	//adding a diff local tranport as peer to our current trasnport
-	t.peers[tr.addr] = tr
+	t.peers[tr.Addr()] = tr.(*LocalTransport)
 	return nil
 }
 
