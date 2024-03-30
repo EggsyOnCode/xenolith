@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"log"
 	"math/rand"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func generateRandomString(length int) string {
 	return string(b)
 }
 
-func TestCodec(t *testing.T) {
+func TestHeaderCodec(t *testing.T) {
 	str := generateRandomString(32)
 	header := &Header{
 		Version:   1,
@@ -36,4 +37,42 @@ func TestCodec(t *testing.T) {
 	hDecode := &Header{}
 	assert.Nil(t, hDecode.DecodeBinary(buf))
 	assert.Equal(t, header, hDecode)
+}
+
+func TestBlockCodec(t *testing.T) {
+	str := generateRandomString(32)
+	header := &Header{
+		Version:   1,
+		PrevBlock: core_types.HashFromBytes([]byte(str)),
+		Head:      1,
+		Nonce:     999,
+		Timestamp: uint64(time.Now().UnixNano()),
+	}
+	block := &Block{
+		Header:       *header,
+		Transactions: nil,
+	}
+	buf := new(bytes.Buffer)
+	assert.Nil(t, block.EncodeBlock(buf))
+	//dummy header where the buf will be decoded into
+	blockDecode := &Block{}
+	assert.Nil(t, blockDecode.DecodeBlock(buf))
+	assert.Equal(t, block, blockDecode)
+}
+func TestBlockHash(t *testing.T) {
+	str := generateRandomString(32)
+	header := &Header{
+		Version:   1,
+		PrevBlock: core_types.HashFromBytes([]byte(str)),
+		Head:      1,
+		Nonce:     999,
+		Timestamp: uint64(time.Now().UnixNano()),
+	}
+	block := &Block{
+		Header:       *header,
+		Transactions: nil,
+	}
+	hash := block.Hash()
+	log.Println(hash)
+	assert.False(t, hash.IsZero())
 }
