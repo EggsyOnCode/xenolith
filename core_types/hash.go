@@ -1,6 +1,10 @@
 package core_types
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+	"math/rand"
+	"time"
+)
 
 type Hash [32]uint8
 
@@ -37,4 +41,16 @@ func (h *Hash) ToSlice() []byte {
 // hash is implementing the String interface meaning all its outputs will now be typecasted to  hex string
 func (h Hash) String() string {
 	return hex.EncodeToString(h.ToSlice())
+}
+
+// utils func
+func GenerateRandomHash(length int) Hash {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return (HashFromBytes(b))
 }

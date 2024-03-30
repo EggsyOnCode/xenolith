@@ -1,10 +1,13 @@
 package core
 
-import "io"
+import (
+	"crypto"
+
+	"github.com/EggsyOnCode/xenolith/crypto_lib"
+)
 
 type Transaction struct {
-	Data []byte
+	Data      []byte
+	Validator crypto.PublicKey
+	Signature *crypto_lib.Signature
 }
-
-func (t *Transaction) EncodeBinary(w io.Writer) error { return nil }
-func (t *Transaction) DecodeBinary(r io.Reader) error { return nil }
