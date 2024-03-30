@@ -15,7 +15,7 @@ func main() {
 	go func() {
 		for {
 			rt.SendMsg(":3000", []byte("hello local"))
-      time.Sleep(500 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 	serverOpts := network.ServerOpts{
