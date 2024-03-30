@@ -24,7 +24,8 @@ func GeneratePrivateKey() *PrivateKey {
 
 	return &PrivateKey{key: key}
 }
-//msg are signed with PrivateKey
+
+// msg are signed with PrivateKey
 func (p *PrivateKey) Sign(data []byte) (*Signature, error) {
 	r, s, err := ecdsa.Sign(rand.Reader, p.key, data)
 	if err != nil {
@@ -53,12 +54,11 @@ func (p *PublicKey) Address() core_types.Address {
 	return core_types.AddressFromBytes(hash[len(hash)-20:])
 }
 
-
 type Signature struct {
 	r, s *big.Int
 }
 
-//msg can be verified with the public key
+// msg can be verified with the public key
 func (sig *Signature) Verify(data []byte, p *PublicKey) bool {
 	return ecdsa.Verify(p.key, data, sig.r, sig.s)
 }

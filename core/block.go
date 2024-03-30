@@ -1,7 +1,9 @@
 package core
 
 import (
-	"crypto"
+	"bytes"
+	"encoding/gob"
+	"fmt"
 	"io"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
@@ -25,7 +27,7 @@ type Block struct {
 	Header       *Header
 	Transactions []Transaction
 	//these two fields are for the validator/miner that would be proposing hte block to the network
-	Validator crypto.PublicKey
+	Validator *crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
 	//cached hash of the block (so that if someone reqs it we don;t have to hash it agin n again)
 	hash core_types.Hash
@@ -41,11 +43,39 @@ func (b *Block) Hash(hasher Hasher[*Block]) core_types.Hash {
 	return b.hash
 }
 
-func (b *Block) Encode(w io.Writer,enc Encoder[*Block]) error{
-	return enc.Encode(w,b)
+func (b *Block) Encode(w io.Writer, enc Encoder[*Block]) error {
+	return enc.Encode(w, b)
 }
-func (b *Block) Decode(r io.Reader,dec Decoder[*Block]) error{
-	return dec.Decode(r,b)
+func (b *Block) Decode(r io.Reader, dec Decoder[*Block]) error {
+	return dec.Decode(r, b)
 }
 
+func (b *Block) Sign(priv *crypto_lib.PrivateKey) error {
+	sig, err := priv.Sign(b.HeaderData())
+	if err != nil {
+		return err
+	}
+	b.Validator = priv.PublicKey()
+	b.Signature = sig
 
+	return nil
+}
+
+func (b *Block) Verify() (bool, error) {
+	if (b.Signature == nil) || (b.Validator == nil) {
+		return false, fmt.Errorf("Block not signed")
+	}
+	return b.Signature.Verify(b.HeaderData(), b.Validator), fmt.Errorf("invalid signature")
+}
+
+func (b *Block) HeaderData() []byte {
+	buf := &bytes.Buffer{}
+	//buf is the io.Writer in which the encoded data will be written to
+	enc := gob.NewEncoder(buf)
+	fmt.Printf("Header Head: %v\n", b.Header.Head)
+	if err := enc.Encode(b.Header); err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes()
+}
