@@ -17,7 +17,7 @@ type BlockHasher struct{}
 
 // sha256 implementatin has been used
 // since the type itself is never used in  the implementation, we can use a receiver of type BlockHaser
-func (BlockHasher) Hash(b *Block) core_types.Hash {
-	h := sha256.Sum256(b.HeaderData())
+func (BlockHasher) Hash(header *Header) core_types.Hash {
+	h := sha256.Sum256(header.Bytes())
 	return core_types.Hash(h)
 }

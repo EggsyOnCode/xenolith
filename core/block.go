@@ -23,6 +23,17 @@ type Header struct {
 	Timestamp uint64
 }
 
+func (h *Header) Bytes() []byte {
+	buf := &bytes.Buffer{}
+	//buf is the io.Writer in which the encoded data will be written to
+	enc := gob.NewEncoder(buf)
+	if err := enc.Encode(h); err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes()
+}
+
 type Block struct {
 	Header       *Header
 	Transactions []Transaction
@@ -35,9 +46,9 @@ type Block struct {
 
 // implementing the Hasher interface for the Block type (Hasher[*Block])
 // here we are passing block as a type to Hasher
-func (b *Block) Hash(hasher Hasher[*Block]) core_types.Hash {
+func (b *Block) Hash(hasher Hasher[*Header]) core_types.Hash {
 	if b.hash.IsZero() {
-		b.hash = hasher.Hash(b)
+		b.hash = hasher.Hash(b.Header)
 	}
 
 	return b.hash
@@ -51,7 +62,7 @@ func (b *Block) Decode(r io.Reader, dec Decoder[*Block]) error {
 }
 
 func (b *Block) Sign(priv *crypto_lib.PrivateKey) error {
-	sig, err := priv.Sign(b.HeaderData())
+	sig, err := priv.Sign(b.Header.Bytes())
 	if err != nil {
 		return err
 	}
@@ -65,17 +76,17 @@ func (b *Block) Verify() (bool, error) {
 	if (b.Signature == nil) || (b.Validator == nil) {
 		return false, fmt.Errorf("Block not signed")
 	}
-	return b.Signature.Verify(b.HeaderData(), b.Validator), fmt.Errorf("invalid signature")
+	return b.Signature.Verify(b.Header.Bytes(), b.Validator), fmt.Errorf("invalid signature")
 }
 
-func (b *Block) HeaderData() []byte {
-	buf := &bytes.Buffer{}
-	//buf is the io.Writer in which the encoded data will be written to
-	enc := gob.NewEncoder(buf)
-	fmt.Printf("Header Height: %v\n", b.Header.Height)
-	if err := enc.Encode(b.Header); err != nil {
-		panic(err)
-	}
 
-	return buf.Bytes()
-}
+// func (b *Block) HeaderData() []byte {
+// 	buf := &bytes.Buffer{}
+// 	//buf is the io.Writer in which the encoded data will be written to
+// 	enc := gob.NewEncoder(buf)
+// 	if err := enc.Encode(b.Header); err != nil {
+// 		panic(err)
+// 	}
+
+// 	return buf.Bytes()
+// }

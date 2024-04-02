@@ -1,5 +1,7 @@
 package core
 
+import "fmt"
+
 type Blockchain struct {
 	headers   []*Header
 	store     Storage
@@ -46,6 +48,15 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 // Return height of the Blockchain
 func (bc *Blockchain) Height() uint32 {
 	return uint32(len(bc.headers) - 1)
+}
+
+func (bc *Blockchain) GetHeaders(height uint32) (*Header, error){
+	if height > bc.Height(){
+		return nil, fmt.Errorf("Block with height %v is too high", height)
+	}
+	//when adding the first block with height 1 , the height of the blockchain is 0 therefore we can't access bc.headers[1]
+	return bc.headers[height], nil
+
 }
 
 // for adding say a genesis  block

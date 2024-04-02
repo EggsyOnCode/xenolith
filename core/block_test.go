@@ -26,11 +26,11 @@ func randomBlock(height uint32) *Block {
 	}
 }
 
-func randomBlockWithSignature(t *testing.T, height uint32) *Block {
+func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.Hash) *Block {
 	header := &Header{
 		Version:       1,
 		Height:        height,
-		PrevBlockHash: core_types.GenerateRandomHash(32),
+		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
 	}
 	tx := &Transaction{
