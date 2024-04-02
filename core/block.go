@@ -18,7 +18,7 @@ type Header struct {
 	//hash of all hte tx data
 	DataHash      core_types.Hash
 	PrevBlockHash core_types.Hash
-	Head          uint32
+	Height          uint32
 	//rep the unix timestamp
 	Timestamp uint64
 }
@@ -72,7 +72,7 @@ func (b *Block) HeaderData() []byte {
 	buf := &bytes.Buffer{}
 	//buf is the io.Writer in which the encoded data will be written to
 	enc := gob.NewEncoder(buf)
-	fmt.Printf("Header Head: %v\n", b.Header.Head)
+	fmt.Printf("Header Height: %v\n", b.Header.Height)
 	if err := enc.Encode(b.Header); err != nil {
 		panic(err)
 	}

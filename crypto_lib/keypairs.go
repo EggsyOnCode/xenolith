@@ -27,6 +27,7 @@ func GeneratePrivateKey() *PrivateKey {
 
 // msg are signed with PrivateKey
 func (p *PrivateKey) Sign(data []byte) (*Signature, error) {
+
 	r, s, err := ecdsa.Sign(rand.Reader, p.key, data)
 	if err != nil {
 		return nil, err
