@@ -1,8 +1,14 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+
+	"github.com/sirupsen/logrus"
+)
 
 type Blockchain struct {
+	lock      sync.Mutex
 	headers   []*Header
 	store     Storage
 	Validator Validator
@@ -34,26 +40,38 @@ func (bc *Blockchain) SetValidator(v Validator) {
 func (bc *Blockchain) AddBlock(b *Block) error {
 	//validate block
 	err := bc.Validator.ValidateBlock(b)
-	if err!=nil{
+	if err != nil {
 		return err
 	}
 	//adding the block headers to blockchain headers list
+	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)
+	bc.lock.Unlock()
 	//add block to the chain via Put method of store
 	bc.store.Put(b)
+
+	logrus.WithFields(logrus.Fields{
+		"height": b.Header.Height,
+		"hash":   b.Hash(BlockHasher{}),
+	}).Info("Added block to blockchain")
 
 	return nil
 }
 
 // Return height of the Blockchain
 func (bc *Blockchain) Height() uint32 {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
 	return uint32(len(bc.headers) - 1)
 }
 
-func (bc *Blockchain) GetHeaders(height uint32) (*Header, error){
-	if height > bc.Height(){
+func (bc *Blockchain) GetHeaders(height uint32) (*Header, error) {
+	if height > bc.Height() {
 		return nil, fmt.Errorf("Block with height %v is too high", height)
 	}
+
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
 	//when adding the first block with height 1 , the height of the blockchain is 0 therefore we can't access bc.headers[1]
 	return bc.headers[height], nil
 
@@ -61,13 +79,15 @@ func (bc *Blockchain) GetHeaders(height uint32) (*Header, error){
 
 // for adding say a genesis  block
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
+	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)
+	bc.lock.Unlock()
 	//add block to the chain
 	bc.store.Put(b)
 
 	return nil
 }
 
-func (bc *Blockchain) HasBlock(height uint32) bool{
+func (bc *Blockchain) HasBlock(height uint32) bool {
 	return height <= bc.Height()
 }

@@ -38,6 +38,13 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 		return fmt.Errorf("Block with height %v and hash %v has a different previous block hash %v", b.Header.Height, b.Hash(BlockHasher{}), b.Header.PrevBlockHash)
 	}
 
+	//verifies the transactions in the block
+	for _, tx := range b.Transactions {
+		if ans, err := tx.Verify(); err != nil && !ans{
+			return err
+		}
+	}
+
 	//verifies if the block has been signed
 	if ans, err := b.Verify(); err != nil && !ans {
 		return err

@@ -33,14 +33,17 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
 	}
+
+	//generating a private key
+	priv := crypto_lib.GeneratePrivateKey()
 	tx := &Transaction{
 		Data: []byte("Hello World"),
 	}
+	tx.Sign(priv)
 	block := &Block{
 		Header:       header,
 		Transactions: []Transaction{*tx},
 	}
-	priv := crypto_lib.GeneratePrivateKey()
 	assert.Nil(t, block.Sign(priv))
 	return block
 }
