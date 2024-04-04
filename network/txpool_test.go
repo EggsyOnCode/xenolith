@@ -2,19 +2,34 @@ package network
 
 import (
 	"fmt"
+	"math/rand"
+	"sort"
 	"testing"
+	"time"
 
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/stretchr/testify/assert"
 )
 
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// RandString generates a random string of length n.
+func RandString(n int) string {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
 func randomTx() *core.Transaction {
-	return core.NewTransaction([]byte("random data"))
+	tx := core.NewTransaction([]byte(RandString(10)))
+	tx.SetTimeStamp(time.Now().Unix())
+	return tx
 }
 
-
-func TestTxPoolAddTx(t *testing.T){
+func TestTxPoolAddTx(t *testing.T) {
 	p := NewTxPool()
 	tx := randomTx()
 	pvK := crypto_lib.GeneratePrivateKey()
@@ -39,34 +54,25 @@ func TestTxPoolAddTx(t *testing.T){
 	assert.Equal(t, 0, p.Len())
 }
 
-// func TestDuplicateTxAddingToPool(t *testing.T){
-// 	p := NewTxPool()
-// 	tx := randomTx()
-// 	pvK := crypto_lib.GeneratePrivateKey()
-// 	tx.Sign(pvK)
+func TestTxPoolSorter(t *testing.T) {
+	p := NewTxPool()
+	count := 100
+	for i := 0; i < count; i++ {
+		tx := randomTx()
+		pvK := crypto_lib.GeneratePrivateKey()
+		tx.Sign(pvK)
+		assert.Nil(t, p.Add(tx))
+	}
 
-// 	//adding verified tx to the mempool
-// 	assert.Nil(t, p.Add(tx))
+	tx2 := randomTx()
+	pvK := crypto_lib.GeneratePrivateKey()
+	tx2.Sign(pvK)
+	assert.Nil(t, p.Add(tx2))
+	//sorting the txs
+	s := NewTxMapSorter(p.transactions)
+	assert.Equal(t, count+1, len(s.transactions))
 
-// 	//checking if the tx is present in the mempool
-// 	assert.True(t, p.Has(tx.Hash(core.TxHasher{})))
-
-// 	//checking if the length of the mempool is 1
-// 	assert.Equal(t, 1, p.Len())
-
-// 	//adding a duplicate tx to the mempool
-// 	tx1 := core.NewTransaction([]byte("random data"))
-// 	tx1.Sign(pvK)
-// 	assert.Nil(t, p.Add(tx1))
-
-// 	// ensuring that the duplicate tx was not added to the pool
-// 	assert.Equal(t, 1, p.Len())
-// }
-// func TestUnSignedTxAddingToPool(t *testing.T){
-// 	p := NewTxPool()
-// 	tx := randomTx()
-
-// 	//adding verified tx to the mempool
-// 	assert.NotNil(t, p.Add(tx))
-
-// }
+	//sorting the txs
+	sort.Sort(s)
+	assert.Equal(t, tx2.TimeStamp(), s.transactions[count].TimeStamp())
+}

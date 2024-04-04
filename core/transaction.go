@@ -11,6 +11,7 @@ type Transaction struct {
 	Data      []byte
 	From      *crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
+	timeStamp int64
 
 	//caches the hash of the tx
 	hash core_types.Hash
@@ -48,4 +49,14 @@ func (t *Transaction) Verify() (bool, error) {
 	}
 	// return t.Signature.Verify(t.Data, t.From), fmt.Errorf("invalid signature")
 	return t.Signature.Verify(t.Data, t.From), nil
+}
+
+//setters and getters for the timestamp
+
+func (t *Transaction) SetTimeStamp(timeStamp int64) {
+	t.timeStamp = timeStamp
+}
+
+func (t *Transaction) TimeStamp() int64 {
+	return t.timeStamp
 }

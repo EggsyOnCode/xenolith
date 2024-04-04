@@ -1,6 +1,8 @@
 package network
 
 import (
+	"sort"
+
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/core_types"
 )
@@ -34,4 +36,40 @@ func (p *TxPool) Add(tx *core.Transaction) error {
 func (p *TxPool) Has(hash core_types.Hash) bool {
 	_, ok := p.transactions[hash]
 	return ok
+}
+
+// TxMapSorter implements the sort.Interface for []Transaction
+// we need overrides for the Len, Less and Swap methods
+type TxMapSorter struct {
+	transactions []*core.Transaction
+}
+
+func NewTxMapSorter(txx map[core_types.Hash]*core.Transaction) *TxMapSorter {
+	tMap := make([]*core.Transaction, len(txx))
+
+	i := 0
+	for _, tx := range txx {
+		tMap[i] = tx
+		i++
+	}
+
+	s := &TxMapSorter{
+		transactions: tMap,
+	}
+
+	sort.Sort(s)
+	return s
+}
+
+func (s *TxMapSorter) Len() int {
+	return len(s.transactions)
+}
+
+func (s *TxMapSorter) Less(i, j int) bool {
+	return s.transactions[i].TimeStamp() < s.transactions[j].TimeStamp()
+}
+
+//syntax of swapping two numbers in Go
+func (s *TxMapSorter) Swap(i, j int) {
+	s.transactions[i], s.transactions[j] = s.transactions[j], s.transactions[i]
 }
