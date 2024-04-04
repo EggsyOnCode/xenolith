@@ -1,8 +1,6 @@
 package network
 
 import (
-	"fmt"
-
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/core_types"
 )
@@ -26,16 +24,8 @@ func (p *TxPool) Flush() {
 	p.transactions = make(map[core_types.Hash]*core.Transaction)
 }
 
-// we are assuming that we are receiving a verified tx?
+// Add adds a transaction to the pool; the responsibilty of checking if the tx already exists in the mempool is server's
 func (p *TxPool) Add(tx *core.Transaction) error {
-	//verify the transaction
-	if ans, _:=  tx.Verify();!ans {
-		return fmt.Errorf("tx not signed")
-	}
-
-	if p.Has(tx.Hash(core.TxHasher{})) {
-		return nil
-	}
 	p.transactions[tx.Hash(core.TxHasher{})] = tx
 
 	return nil
@@ -45,4 +35,3 @@ func (p *TxPool) Has(hash core_types.Hash) bool {
 	_, ok := p.transactions[hash]
 	return ok
 }
-

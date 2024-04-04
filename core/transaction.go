@@ -11,6 +11,9 @@ type Transaction struct {
 	Data      []byte
 	From      *crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
+
+	//caches the hash of the tx
+	hash core_types.Hash
 }
 
 func NewTransaction(data []byte) *Transaction {
@@ -21,7 +24,11 @@ func NewTransaction(data []byte) *Transaction {
 
 // making the Tx hasher implementation generic
 func (t *Transaction) Hash(h Hasher[*Transaction]) core_types.Hash {
-	return h.Hash(t)
+	if t.hash.IsZero() {
+		t.hash = h.Hash(t)
+	}
+
+	return t.hash
 }
 
 func (t *Transaction) Sign(priv *crypto_lib.PrivateKey) error {
