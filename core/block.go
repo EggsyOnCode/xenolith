@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"io"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
@@ -18,7 +17,7 @@ type Header struct {
 	//hash of all hte tx data
 	DataHash      core_types.Hash
 	PrevBlockHash core_types.Hash
-	Height          uint32
+	Height        uint32
 	//rep the unix timestamp
 	Timestamp uint64
 }
@@ -54,11 +53,11 @@ func (b *Block) Hash(hasher Hasher[*Header]) core_types.Hash {
 	return b.hash
 }
 
-func (b *Block) Encode(w io.Writer, enc Encoder[*Block]) error {
-	return enc.Encode(w, b)
+func (b *Block) Encode(enc Encoder[*Block]) error {
+	return enc.Encode(b)
 }
-func (b *Block) Decode(r io.Reader, dec Decoder[*Block]) error {
-	return dec.Decode(r, b)
+func (b *Block) Decode(dec Decoder[*Block]) error {
+	return dec.Decode(b)
 }
 
 func (b *Block) Sign(priv *crypto_lib.PrivateKey) error {
@@ -78,7 +77,6 @@ func (b *Block) Verify() (bool, error) {
 	}
 	return b.Signature.Verify(b.Header.Bytes(), b.Validator), fmt.Errorf("invalid signature")
 }
-
 
 // func (b *Block) HeaderData() []byte {
 // 	buf := &bytes.Buffer{}

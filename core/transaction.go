@@ -60,3 +60,11 @@ func (t *Transaction) SetTimeStamp(timeStamp int64) {
 func (t *Transaction) TimeStamp() int64 {
 	return t.timeStamp
 }
+
+
+func (t *Transaction) Encode(enc Encoder[*Transaction]) error {
+	return enc.Encode(t)
+}
+func (t *Transaction) Decode(dec Decoder[*Transaction]) error {
+	return dec.Decode(t)
+}

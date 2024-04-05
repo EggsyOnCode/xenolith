@@ -1,13 +1,14 @@
 package core
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSignTX(t *testing.T){
+func TestSignTX(t *testing.T) {
 	tx := &Transaction{
 		Data: []byte("Hello World"),
 	}
@@ -17,7 +18,7 @@ func TestSignTX(t *testing.T){
 	assert.NotNil(t, tx.Signature)
 	assert.Equal(t, tx.From, priv.PublicKey())
 }
-func TestTxVerification(t *testing.T){
+func TestTxVerification(t *testing.T) {
 	tx := &Transaction{
 		Data: []byte("Hello World"),
 	}
@@ -34,5 +35,22 @@ func TestTxVerification(t *testing.T){
 
 	ver, _ := tx.Verify()
 	assert.False(t, ver)
+
+}
+
+func TestCodecTx(t *testing.T) {
+	tx := &Transaction{
+		Data: []byte("Hello World"),
+	}
+
+	buf := &bytes.Buffer{}
+
+	assert.Nil(t, tx.Encode(NewGobTxEncoder(buf)))
+
+	//the value of the encoded tx will be decoded into txDecoded
+	txDecoded := new(Transaction)
+	assert.Nil(t, txDecoded.Decode(NewGobTxDecoder(buf)))
+
+	assert.Equal(t, tx.Data, txDecoded.Data)
 
 }

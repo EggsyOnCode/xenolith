@@ -1,17 +1,22 @@
 package network
 
 import (
-	"crypto"
+	"bytes"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/EggsyOnCode/xenolith/core"
+	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/sirupsen/logrus"
 )
 
+var defaultBlockTime = 5 * time.Second
+
 type ServerOpts struct {
+	RPCHandler   RPCHandler
 	Transporters []Transport
-	PrivateKey   *crypto.PrivateKey
+	PrivateKey   *crypto_lib.PrivateKey
 	//time interval after  which the server will fetch Tx from teh Mempool and create a block
 	BlockTime time.Duration
 }
@@ -27,6 +32,9 @@ type Server struct {
 }
 
 func NewServer(opts ServerOpts) *Server {
+	if opts.BlockTime == time.Duration(0) {
+		opts.BlockTime = defaultBlockTime
+	}
 	return &Server{
 		ServerOpts:  opts,
 		blocktime:   opts.BlockTime,
@@ -46,7 +54,7 @@ free:
 	for {
 		select {
 		case rpc := <-s.rpcCh:
-			fmt.Println("Server received msg from ", rpc.From, " with payload ", string(rpc.Payload))
+			fmt.Println("Server received msg from ", rpc.From, " with payload ", readerToString(rpc.Payload))
 		case <-s.quitCh:
 			break free
 		case <-ticker.C:
@@ -98,4 +106,10 @@ func (s *Server) initTransporters() error {
 	}
 
 	return nil
+}
+
+func readerToString(r io.Reader) string {
+	buffer := new(bytes.Buffer)
+	buffer.ReadFrom(r)
+	return buffer.String()
 }

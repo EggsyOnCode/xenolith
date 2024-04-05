@@ -1,6 +1,7 @@
 package network
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,5 +14,5 @@ func TestLocalTransport(t *testing.T) {
 	lt.Connect(remote)
 	assert.Equal(t, lt.peers[":4000"], remote)
 	lt.SendMsg(":4000", []byte("hello"))
-	assert.Equal(t, <-remote.consumeCh, RPC{From: ":3000", Payload: []byte("hello")})
+	assert.Equal(t, <-remote.consumeCh, RPC{From: ":3000", Payload: bytes.NewReader([]byte("hello"))})
 }

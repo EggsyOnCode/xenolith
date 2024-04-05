@@ -1,6 +1,7 @@
 package network
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 )
@@ -14,7 +15,7 @@ type LocalTransport struct {
 }
 
 func NewRPCMsg(from NetAddr, payload []byte) *RPC {
-	return &RPC{From: from, Payload: payload}
+	return &RPC{From: from, Payload: bytes.NewReader(payload)}
 }
 func NewLocalTransport(addr NetAddr) *LocalTransport {
 	return &LocalTransport{
@@ -48,7 +49,7 @@ func (t *LocalTransport) SendMsg(addr NetAddr, payload []byte) error {
 	// sending msg to peer
 	peer, ok := t.peers[addr]
 	if ok {
-		peer.consumeCh <- RPC{From: t.addr, Payload: payload}
+		peer.consumeCh <- RPC{From: t.addr, Payload: bytes.NewReader(payload)}
 		return nil
 	}
 	return fmt.Errorf("peer not found")
