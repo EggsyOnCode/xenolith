@@ -104,6 +104,8 @@ func (s *Server) ProcessTx(addr NetAddr, tx *core.Transaction) error {
 		"from": tx.From,
 	}).Info("adding new tx to the mempool")
 
+	//TODO: broadcast the tx to the network
+
 	return s.memPool.Add(tx)
 }
 

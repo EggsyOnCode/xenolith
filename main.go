@@ -19,7 +19,7 @@ func main() {
 
 	go func() {
 		for {
-			//local transport senidn msg to remote transport
+			//local transport sending to remote transport
 			if err := sendTx(rt, tr) ; err != nil {
 				logrus.Error(err)
 			}
