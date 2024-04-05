@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/EggsyOnCode/xenolith/core"
+	"github.com/sirupsen/logrus"
 )
 
 type NetAddr string
@@ -50,39 +51,45 @@ type RPCHandler interface {
 }
 
 type RPCProcessor interface {
-	ProcessTx(NetAddr, *core.Transaction) error
+	ProcessMessage(*DecodedMsg) error
 }
 
 // concrete RPCHandler implementation
-type DefaultRPCHandler struct {
-	p RPCProcessor
+type DecodedMsg struct {
+	From NetAddr
+	Data any
 }
 
-func NewRPCHandler(processor RPCProcessor) *DefaultRPCHandler {
-	return &DefaultRPCHandler{
-		p: processor,
-	}
-}
+type RPCDecodeFunc func(RPC) (*DecodedMsg, error)
 
-func (rpc *DefaultRPCHandler) HandleRPC(r RPC) error {
+func DefaultRPCDecodeFunc(rpc RPC) (*DecodedMsg, error) {
 	//decoding the payload of hte rpc via gob decoder
 	msg := &Message{}
-	if err := gob.NewDecoder(r.Payload).Decode(msg); err != nil {
-		return fmt.Errorf("failed to decode message: %v ; from : %v", err, r.From)
+	if err := gob.NewDecoder(rpc.Payload).Decode(msg); err != nil {
+		return nil, fmt.Errorf("failed to decode message: %v ; from : %v", err, rpc.From)
 	}
+
+	// to print out the incoming msg type and the origin
+	logrus.WithFields(logrus.Fields{
+		"from" : rpc.From,
+		"type" : msg.Headers,
+	}).Debug("incoming message")
 
 	switch msg.Headers {
 	case MessageTypeTx:
 		tx := new(core.Transaction)
 		//msg.Data --> io reader --> feeding into the gob decoder --> decode into tx
 		if err := tx.Decode(core.NewGobTxDecoder(bytes.NewReader(msg.Data))); err != nil {
-			return err
+			return nil, err
 		}
 
-		return rpc.p.ProcessTx(r.From, tx)
+		return &DecodedMsg{
+			From: rpc.From,
+			Data: tx,
+		}, nil
 	default:
 		fmt.Println(msg)
-		return fmt.Errorf("unknown message type: %v", msg.Headers)
+		return nil, fmt.Errorf("unknown message type: %v", msg.Headers)
 	}
 }
 

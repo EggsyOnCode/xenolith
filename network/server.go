@@ -14,9 +14,10 @@ import (
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
-	RPCHandler   RPCHandler
-	Transporters []Transport
-	PrivateKey   *crypto_lib.PrivateKey
+	RPCDecodeFunc RPCDecodeFunc
+	RPCProcessor  RPCProcessor
+	Transporters  []Transport
+	PrivateKey    *crypto_lib.PrivateKey
 	//time interval after  which the server will fetch Tx from teh Mempool and create a block
 	BlockTime time.Duration
 }
@@ -26,7 +27,6 @@ type Server struct {
 	//is the PvK is not nil then the server is a validator
 	isValidator bool
 	rpcCh       chan RPC
-	blocktime   time.Duration
 	memPool     *TxPool
 	quitCh      chan struct{}
 }
@@ -35,16 +35,20 @@ func NewServer(opts ServerOpts) *Server {
 	if opts.BlockTime == time.Duration(0) {
 		opts.BlockTime = defaultBlockTime
 	}
+	if opts.RPCDecodeFunc == nil {
+		opts.RPCDecodeFunc = DefaultRPCDecodeFunc
+	}
 	s := &Server{
 		ServerOpts:  opts,
-		blocktime:   opts.BlockTime,
 		rpcCh:       make(chan RPC),
 		isValidator: opts.PrivateKey != nil,
 		quitCh:      make(chan struct{}),
 		memPool:     NewTxPool(),
 	}
-	if s.ServerOpts.RPCHandler == nil {
-		s.ServerOpts.RPCHandler = NewRPCHandler(s)
+
+	// if the rpc processor has not been defined; then we can assume that the server itself is the processor
+	if s.RPCProcessor == nil {
+		s.RPCProcessor = s
 	}
 
 	return s
@@ -59,7 +63,12 @@ free:
 	for {
 		select {
 		case rpc := <-s.rpcCh:
-			if err := s.RPCHandler.HandleRPC(rpc); err !=nil{
+			msg, err := DefaultRPCDecodeFunc(rpc)
+			if err != nil {
+				logrus.Error(err)
+			}
+
+			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
 				logrus.Error(err)
 			}
 		case <-s.quitCh:
@@ -79,8 +88,19 @@ func (s *Server) createNewBlock() {
 	fmt.Println("Creating a new block")
 }
 
+//process Msg acts as the router routing the deocded msg to their appropriate handlers
+func (s *Server) ProcessMessage(msg *DecodedMsg) error {
+	switch t := msg.Data.(type) {
+	case *core.Transaction:
+		//where t is essentially the msg.Data
+		return s.processTx(t)
+	}
+
+	return nil
+}
+
 // either the server fetches tx from the mempool or receives Tx from the transporters; this func would handle the tx from both
-func (s *Server) ProcessTx(addr NetAddr, tx *core.Transaction) error {
+func (s *Server) processTx(tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
 	if s.memPool.Has(hash) {
@@ -104,9 +124,29 @@ func (s *Server) ProcessTx(addr NetAddr, tx *core.Transaction) error {
 		"from": tx.From,
 	}).Info("adding new tx to the mempool")
 
-	//TODO: broadcast the tx to the network
+	go s.broadcastTx(tx)
 
 	return s.memPool.Add(tx)
+}
+
+func (s *Server) broadcast(payload []byte) error {
+	for _, tr := range s.Transporters {
+		if err := tr.Broadcast(payload); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) broadcastTx(tx *core.Transaction) error {
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		return err
+	}
+
+	msg := NewMessage(MessageTypeTx, buf.Bytes())
+	return s.broadcast(msg.Bytes())
 }
 
 func (s *Server) initTransporters() error {

@@ -53,3 +53,13 @@ func (t *LocalTransport) SendMsg(addr NetAddr, payload []byte) error {
 	return fmt.Errorf("peer not found")
 
 }
+
+func (t *LocalTransport) Broadcast(payload []byte) error{
+	for _, peer := range t.peers{
+		if err := t.SendMsg(peer.Addr(), payload); err !=nil{
+			return err
+		}
+	}
+
+	return nil
+}
