@@ -1,6 +1,7 @@
 package core
 
 import (
+	"crypto/elliptic"
 	"encoding/gob"
 	"io"
 )
@@ -24,6 +25,7 @@ type GobTxDecoder struct {
 }
 
 func NewGobTxEncoder(w io.Writer) *GobTxEncoder {
+	gob.Register(elliptic.P256())
 	return &GobTxEncoder{
 		writer: w,
 	}
@@ -34,12 +36,13 @@ func (g GobTxEncoder) Encode(tx *Transaction) error {
 }
 
 func NewGobTxDecoder(r io.Reader) *GobTxDecoder {
+	gob.Register(elliptic.P256())
 	return &GobTxDecoder{
 		reader: r,
 	}
 }
 
-//decode encoded tx
+// decode encoded tx
 func (g GobTxDecoder) Decode(tx *Transaction) error {
 	return gob.NewDecoder(g.reader).Decode(tx)
 }

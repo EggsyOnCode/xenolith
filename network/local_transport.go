@@ -14,9 +14,6 @@ type LocalTransport struct {
 	lock      sync.RWMutex
 }
 
-func NewRPCMsg(from NetAddr, payload []byte) *RPC {
-	return &RPC{From: from, Payload: bytes.NewReader(payload)}
-}
 func NewLocalTransport(addr NetAddr) *LocalTransport {
 	return &LocalTransport{
 		addr:      addr,
@@ -47,6 +44,7 @@ func (t *LocalTransport) SendMsg(addr NetAddr, payload []byte) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	// sending msg to peer
+	fmt.Println(t.peers)
 	peer, ok := t.peers[addr]
 	if ok {
 		peer.consumeCh <- RPC{From: t.addr, Payload: bytes.NewReader(payload)}

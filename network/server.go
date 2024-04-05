@@ -35,7 +35,7 @@ func NewServer(opts ServerOpts) *Server {
 	if opts.BlockTime == time.Duration(0) {
 		opts.BlockTime = defaultBlockTime
 	}
-	return &Server{
+	s := &Server{
 		ServerOpts:  opts,
 		blocktime:   opts.BlockTime,
 		rpcCh:       make(chan RPC),
@@ -43,6 +43,11 @@ func NewServer(opts ServerOpts) *Server {
 		quitCh:      make(chan struct{}),
 		memPool:     NewTxPool(),
 	}
+	if s.ServerOpts.RPCHandler == nil {
+		s.ServerOpts.RPCHandler = NewRPCHandler(s)
+	}
+
+	return s
 }
 
 func (s *Server) Start() error {
@@ -54,7 +59,9 @@ free:
 	for {
 		select {
 		case rpc := <-s.rpcCh:
-			fmt.Println("Server received msg from ", rpc.From, " with payload ", readerToString(rpc.Payload))
+			if err := s.RPCHandler.HandleRPC(rpc); err !=nil{
+				logrus.Error(err)
+			}
 		case <-s.quitCh:
 			break free
 		case <-ticker.C:
@@ -73,23 +80,28 @@ func (s *Server) createNewBlock() {
 }
 
 // either the server fetches tx from the mempool or receives Tx from the transporters; this func would handle the tx from both
-func (s *Server) handleTx(tx *core.Transaction) error {
-	//verify the transaction
-	if ans, _ := tx.Verify(); !ans {
-		return fmt.Errorf("tx not signed")
-	}
-
+func (s *Server) ProcessTx(addr NetAddr, tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
 	if s.memPool.Has(hash) {
 		logrus.WithFields(logrus.Fields{
 			"hash": hash,
+			"from": tx.From,
 		}).Info("tx already exists in mempool")
 		return nil
 	}
 
+	//verify the transaction
+	if ans, _ := tx.Verify(); !ans {
+		return fmt.Errorf("tx not signed")
+	}
+
+	//setting the timestamp for the incoming tx
+	tx.SetTimeStamp(time.Now().Unix())
+
 	logrus.WithFields(logrus.Fields{
 		"hash": hash,
+		"from": tx.From,
 	}).Info("adding new tx to the mempool")
 
 	return s.memPool.Add(tx)
