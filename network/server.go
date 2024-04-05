@@ -4,16 +4,19 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
-	"github.com/sirupsen/logrus"
+	"github.com/go-kit/log"
 )
 
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
+	ID            string
+	Logger        log.Logger
 	RPCDecodeFunc RPCDecodeFunc
 	RPCProcessor  RPCProcessor
 	Transporters  []Transport
@@ -38,6 +41,10 @@ func NewServer(opts ServerOpts) *Server {
 	if opts.RPCDecodeFunc == nil {
 		opts.RPCDecodeFunc = DefaultRPCDecodeFunc
 	}
+	if opts.Logger == nil {
+		opts.Logger = log.NewLogfmtLogger(os.Stderr)
+		opts.Logger = log.With(opts.Logger, "ID", opts.ID)
+	}
 	s := &Server{
 		ServerOpts:  opts,
 		rpcCh:       make(chan RPC),
@@ -51,12 +58,15 @@ func NewServer(opts ServerOpts) *Server {
 		s.RPCProcessor = s
 	}
 
+	if s.isValidator {
+		go s.validatorLoop()
+	}
+
 	return s
 }
 
 func (s *Server) Start() error {
 	s.initTransporters()
-	ticker := time.NewTicker(5 * time.Second)
 	//infinite loop reading the rpc msgs from the transporters
 	// free label used
 free:
@@ -65,30 +75,36 @@ free:
 		case rpc := <-s.rpcCh:
 			msg, err := DefaultRPCDecodeFunc(rpc)
 			if err != nil {
-				logrus.Error(err)
+				s.Logger.Log("err", err)
 			}
 
 			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
-				logrus.Error(err)
+				s.Logger.Log("err", err)
 			}
 		case <-s.quitCh:
 			break free
-		case <-ticker.C:
-			if s.isValidator {
-				//TODO: consensus logic will be written here
-				s.createNewBlock()
-			}
 		}
 	}
-	fmt.Println("Server Stopped!")
+	s.Logger.Log("msg", "server stopping...")
 	return nil
+}
+
+func (s *Server) validatorLoop() {
+	ticker := time.NewTicker(s.BlockTime)
+
+	s.Logger.Log("msg", "server validator loop staring...", "blockTime", s.BlockTime)
+	for {
+		//whenver the ticker value is decremented
+		<-ticker.C
+		s.createNewBlock()
+	}
 }
 
 func (s *Server) createNewBlock() {
 	fmt.Println("Creating a new block")
 }
 
-//process Msg acts as the router routing the deocded msg to their appropriate handlers
+// process Msg acts as the router routing the deocded msg to their appropriate handlers
 func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 	switch t := msg.Data.(type) {
 	case *core.Transaction:
@@ -104,10 +120,6 @@ func (s *Server) processTx(tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
 	if s.memPool.Has(hash) {
-		logrus.WithFields(logrus.Fields{
-			"hash": hash,
-			"from": tx.From,
-		}).Info("tx already exists in mempool")
 		return nil
 	}
 
@@ -119,10 +131,7 @@ func (s *Server) processTx(tx *core.Transaction) error {
 	//setting the timestamp for the incoming tx
 	tx.SetTimeStamp(time.Now().Unix())
 
-	logrus.WithFields(logrus.Fields{
-		"hash": hash,
-		"from": tx.From,
-	}).Info("adding new tx to the mempool")
+	s.Logger.Log("msg", "adding new tx to the mempool", "hash", hash, "memPool len", s.memPool.Len())
 
 	go s.broadcastTx(tx)
 

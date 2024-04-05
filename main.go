@@ -20,7 +20,7 @@ func main() {
 	go func() {
 		for {
 			//local transport sending to remote transport
-			if err := sendTx(rt, tr) ; err != nil {
+			if err := sendTx(rt, tr); err != nil {
 				logrus.Error(err)
 			}
 			time.Sleep(500 * time.Millisecond)
@@ -30,6 +30,7 @@ func main() {
 	//validator node
 	pk := crypto_lib.GeneratePrivateKey()
 	serverOpts := network.ServerOpts{
+		ID:           "local",
 		Transporters: []network.Transport{tr},
 		BlockTime:    5 * time.Second,
 		PrivateKey:   pk,
@@ -39,7 +40,7 @@ func main() {
 	select {}
 }
 
-func sendTx(tr network.Transport, to network.Transport) error{
+func sendTx(tr network.Transport, to network.Transport) error {
 	pk := crypto_lib.GeneratePrivateKey()
 	tx := core.NewTransaction([]byte(RandString(10)))
 	tx.Sign(pk)
