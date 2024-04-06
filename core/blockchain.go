@@ -39,10 +39,13 @@ func (bc *Blockchain) SetValidator(v Validator) {
 // adding a new block to the chain
 func (bc *Blockchain) AddBlock(b *Block) error {
 	//validate block
+
 	err := bc.Validator.ValidateBlock(b)
 	if err != nil {
 		return err
 	}
+	fmt.Println("adding a new blokc...")
+
 	//adding the block headers to blockchain headers list
 	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)

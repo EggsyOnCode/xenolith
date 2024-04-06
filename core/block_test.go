@@ -22,7 +22,7 @@ func randomBlock(height uint32) *Block {
 	}
 	return &Block{
 		Header:       header,
-		Transactions: []Transaction{*tx},
+		Transactions: []*Transaction{tx},
 	}
 }
 
@@ -42,8 +42,12 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 	tx.Sign(priv)
 	block := &Block{
 		Header:       header,
-		Transactions: []Transaction{*tx},
+		Transactions: []*Transaction{tx},
 	}
+	datahash, err := CalculateDataHash(block.Transactions)
+	assert.Nil(t, err)
+	block.Header.DataHash = datahash
+
 	assert.Nil(t, block.Sign(priv))
 	return block
 }
@@ -53,15 +57,15 @@ func TestBlock(t *testing.T) {
 }
 
 func TestSignAndVerifyBlock(t *testing.T) {
-	block := randomBlock(1)
+	block := randomBlockWithSignature(t, 3, core_types.GenerateRandomHash(32))
 	priv := crypto_lib.GeneratePrivateKey()
 	err := block.Sign(priv)
 	assert.Nil(t, err)
 	assert.Equal(t, block.Validator, priv.PublicKey())
 	fmt.Println(block.Signature)
 
-	verification, _ := block.Verify()
-	assert.True(t, verification)
+	err = block.Verify()
+	assert.Nil(t, err)
 }
 
 // func TestVerifyFail(t *testing.T){

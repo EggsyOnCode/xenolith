@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"log"
 	"math/rand"
 	"time"
 
@@ -35,7 +36,10 @@ func main() {
 		BlockTime:    5 * time.Second,
 		PrivateKey:   pk,
 	}
-	server := network.NewServer(serverOpts)
+	server, err := network.NewServer(serverOpts)
+	if err != nil {
+		log.Fatal(err)
+	}
 	server.Start()
 	select {}
 }

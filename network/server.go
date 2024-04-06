@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/EggsyOnCode/xenolith/core"
+	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/go-kit/log"
 )
@@ -29,12 +30,13 @@ type Server struct {
 	ServerOpts
 	//is the PvK is not nil then the server is a validator
 	isValidator bool
+	chain       *core.Blockchain
 	rpcCh       chan RPC
 	memPool     *TxPool
 	quitCh      chan struct{}
 }
 
-func NewServer(opts ServerOpts) *Server {
+func NewServer(opts ServerOpts) (*Server, error) {
 	if opts.BlockTime == time.Duration(0) {
 		opts.BlockTime = defaultBlockTime
 	}
@@ -45,9 +47,15 @@ func NewServer(opts ServerOpts) *Server {
 		opts.Logger = log.NewLogfmtLogger(os.Stderr)
 		opts.Logger = log.With(opts.Logger, "ID", opts.ID)
 	}
+
+	newChain, err := core.NewBlockchain(genesisBlock())
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
 		ServerOpts:  opts,
 		rpcCh:       make(chan RPC),
+		chain:       newChain,
 		isValidator: opts.PrivateKey != nil,
 		quitCh:      make(chan struct{}),
 		memPool:     NewTxPool(),
@@ -62,7 +70,7 @@ func NewServer(opts ServerOpts) *Server {
 		go s.validatorLoop()
 	}
 
-	return s
+	return s, nil
 }
 
 func (s *Server) Start() error {
@@ -100,8 +108,22 @@ func (s *Server) validatorLoop() {
 	}
 }
 
-func (s *Server) createNewBlock() {
-	fmt.Println("Creating a new block")
+func (s *Server) createNewBlock() error {
+	//fetch current block;s headers
+	currentHedaer, err := s.chain.GetHeaders(s.chain.Height())
+	if err!=nil{
+		return err
+	}
+
+	block, err := core.NewBlockFromPrevHeader(currentHedaer, nil)
+	if err != nil{
+		return err
+	}
+
+	//signing the block
+	block.Sign(s.PrivateKey)
+
+	return s.chain.AddBlock(block)
 }
 
 // process Msg acts as the router routing the deocded msg to their appropriate handlers
@@ -175,4 +197,15 @@ func readerToString(r io.Reader) string {
 	buffer := new(bytes.Buffer)
 	buffer.ReadFrom(r)
 	return buffer.String()
+}
+
+func genesisBlock() *core.Block {
+	headers := &core.Header{
+		Version:   1,
+		Height:    0,
+		DataHash:  core_types.Hash{},
+		Timestamp: uint64(time.Now().UnixNano()),
+	}
+
+	return core.NewBlock(headers, nil)
 }

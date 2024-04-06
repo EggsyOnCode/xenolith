@@ -1,6 +1,8 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Validator interface {
 	ValidateBlock(*Block) error
@@ -26,8 +28,8 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 		return fmt.Errorf("Block height %v with Block hash %v is not one greater than the current height %v", b.Header.Height, b.Hash(BlockHasher{}), v.bc.Height())
 	}
 
-	//getting headers for current block 
-	prevHash,  err := v.bc.GetHeaders(b.Header.Height - 1)
+	//getting headers for current block
+	prevHash, err := v.bc.GetHeaders(b.Header.Height - 1)
 	if err != nil {
 		return err
 	}
@@ -40,14 +42,15 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 
 	//verifies the transactions in the block
 	for _, tx := range b.Transactions {
-		if ans, err := tx.Verify(); err != nil && !ans{
+		if ans, err := tx.Verify(); err != nil && !ans {
 			return err
 		}
 	}
 
 	//verifies if the block has been signed
-	if ans, err := b.Verify(); err != nil && !ans {
+	if err := b.Verify(); err != nil {
 		return err
 	}
+	fmt.Println("verified block")
 	return nil
 }

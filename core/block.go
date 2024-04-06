@@ -2,8 +2,10 @@ package core
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
 	"fmt"
+	"time"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
@@ -35,12 +37,36 @@ func (h *Header) Bytes() []byte {
 
 type Block struct {
 	Header       *Header
-	Transactions []Transaction
+	Transactions []*Transaction
 	//these two fields are for the validator/miner that would be proposing hte block to the network
 	Validator *crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
 	//cached hash of the block (so that if someone reqs it we don;t have to hash it agin n again)
 	hash core_types.Hash
+}
+
+func NewBlock(h *Header, txx []*Transaction) *Block {
+	return &Block{
+		Header:       h,
+		Transactions: txx,
+	}
+}
+
+func NewBlockFromPrevHeader(prevHeader *Header, tx []*Transaction) (*Block, error) {
+	datahash, err := CalculateDataHash(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	head := &Header{
+		Version:       prevHeader.Version,
+		PrevBlockHash: BlockHasher{}.Hash(prevHeader),
+		DataHash:      datahash,
+		Timestamp:     uint64(time.Now().UnixNano()),
+		Height:        prevHeader.Height + 1,
+	}
+
+	return NewBlock(head, tx), nil
 }
 
 // implementing the Hasher interface for the Block type (Hasher[*Block])
@@ -71,11 +97,40 @@ func (b *Block) Sign(priv *crypto_lib.PrivateKey) error {
 	return nil
 }
 
-func (b *Block) Verify() (bool, error) {
+// block data hash being calculated when the block  is verified
+func (b *Block) Verify() error {
 	if (b.Signature == nil) || (b.Validator == nil) {
-		return false, fmt.Errorf("Block not signed")
+		return fmt.Errorf("Block not signed")
 	}
-	return b.Signature.Verify(b.Header.Bytes(), b.Validator), fmt.Errorf("invalid signature")
+	if !b.Signature.Verify(b.Header.Bytes(), b.Validator) {
+		return fmt.Errorf("invalid signature")
+	}
+
+	for _, tx := range b.Transactions {
+		if _, err := tx.Verify(); err != nil {
+			return err
+		}
+	}
+	//also need to compare datahash of the slice of tx with the datahs of the proposed block
+	dataHash, _ := CalculateDataHash(b.Transactions)
+	if dataHash != b.Header.DataHash {
+		return fmt.Errorf("invalid data hash")
+	}
+	return nil
+}
+
+func CalculateDataHash(tx []*Transaction) (hash core_types.Hash, err error) {
+	//hashing all the tx data
+	buf := &bytes.Buffer{}
+	for _, tx := range tx {
+		if err = tx.Encode(NewGobTxEncoder(buf)); err != nil {
+			return
+		}
+	}
+
+	hash = sha256.Sum256(buf.Bytes())
+
+	return
 }
 
 // func (b *Block) HeaderData() []byte {
