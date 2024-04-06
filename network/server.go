@@ -135,7 +135,7 @@ func (s *Server) createNewBlock() error {
 		return err
 	}
 
-	return s.broadcastBlock(block)
+	return s.broadcastBlock(block, "")
 }
 
 // process Msg acts as the router routing the deocded msg to their appropriate handlers
@@ -145,21 +145,22 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 		//where t is essentially the msg.Data
 		return s.processTx(t)
 	case *core.Block:
-		return s.processBlock(t)
+		return s.processBlock(t, msg.From)
 	}
 
 	return nil
 }
 
-func (s *Server) processBlock(b *core.Block) error {
+func (s *Server) processBlock(b *core.Block, origin NetAddr) error {
+	//when the block is received from the peers, we need to add it to the local chain
+	//this way the incoming block gets validated as well
 	if err := s.chain.AddBlock(b); err != nil {
 		return err
 	}
 
 	s.Logger.Log("msg", "received block from peers", "block hash", core.BlockHasher{}.Hash(b.Header), "chain height", s.chain.Height())
-	go s.broadcastBlock(b)
+	go s.broadcastBlock(b, origin)
 
-	//do we add this recevied block to our chain or not? TODO
 	return nil
 }
 
@@ -179,7 +180,7 @@ func (s *Server) processTx(tx *core.Transaction) error {
 	//setting the timestamp for the incoming tx
 	tx.SetTimeStamp(time.Now().Unix())
 
-	s.Logger.Log("msg", "adding new tx to the mempool", "hash", hash, "memPool pending", s.memPool.PendingCount())
+	// s.Logger.Log("msg", "adding new tx to the mempool", "hash", hash, "memPool pending", s.memPool.PendingCount())
 
 	go s.broadcastTx(tx)
 
@@ -187,9 +188,9 @@ func (s *Server) processTx(tx *core.Transaction) error {
 	return nil
 }
 
-func (s *Server) broadcast(payload []byte) error {
+func (s *Server) broadcast(payload []byte, origin NetAddr) error {
 	for _, tr := range s.Transporters {
-		if err := tr.Broadcast(payload); err != nil {
+		if err := tr.Broadcast(payload, origin); err != nil {
 			return err
 		}
 	}
@@ -198,14 +199,14 @@ func (s *Server) broadcast(payload []byte) error {
 }
 
 // broadcast block to peers to share the updated state of the chain
-func (s *Server) broadcastBlock(b *core.Block) error {
+func (s *Server) broadcastBlock(b *core.Block, origin NetAddr) error {
 	buf := &bytes.Buffer{}
 	if err := b.Encode(core.NewGobBlockEncoder(buf)); err != nil {
 		return err
 	}
 
 	msg := NewMessage(MessageTypeBlock, buf.Bytes())
-	return s.broadcast(msg.Bytes())
+	return s.broadcast(msg.Bytes(), origin)
 }
 
 func (s *Server) broadcastTx(tx *core.Transaction) error {
@@ -215,7 +216,7 @@ func (s *Server) broadcastTx(tx *core.Transaction) error {
 	}
 
 	msg := NewMessage(MessageTypeTx, buf.Bytes())
-	return s.broadcast(msg.Bytes())
+	return s.broadcast(msg.Bytes(), "")
 }
 
 func (s *Server) initTransporters() error {

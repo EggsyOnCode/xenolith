@@ -47,7 +47,7 @@ func TestBroadcastMsg(t *testing.T) {
 
 	msg := []byte("Hello World")
 
-	lt.Broadcast(msg)
+	lt.Broadcast(msg, "")
 
 	rpc := <-remote.Consume()
 	b, err := ioutil.ReadAll(rpc.Payload)

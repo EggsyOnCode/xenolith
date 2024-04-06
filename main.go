@@ -35,6 +35,15 @@ func main() {
 		}
 	}()
 
+	go func() {
+		time.Sleep(7 * time.Second)
+		trLate := network.NewLocalTransport("TR_LATE")
+		remoteC.Connect(trLate)
+		trLateServer := makeServer(trLate, nil, "TR_LATE_SERVER")
+
+		go trLateServer.Start()
+	}()
+
 	//validator node
 	pk := crypto_lib.GeneratePrivateKey()
 	localServer := makeServer(localT, pk, "LOCAL_SERVER")

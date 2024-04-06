@@ -56,8 +56,11 @@ func (t *LocalTransport) SendMsg(addr NetAddr, payload []byte) error {
 
 }
 
-func (t *LocalTransport) Broadcast(payload []byte) error {
+func (t *LocalTransport) Broadcast(payload []byte, excludedPeer NetAddr) error {
 	for _, peer := range t.peers {
+		if peer.Addr() == excludedPeer {
+			continue
+		}
 		if err := t.SendMsg(peer.Addr(), payload); err != nil {
 			return err
 		}

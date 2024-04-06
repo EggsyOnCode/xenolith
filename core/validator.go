@@ -25,7 +25,7 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 
 	///the height of the proposed block should be one greater than the current height
 	if b.Header.Height != v.bc.Height()+1 {
-		return fmt.Errorf("Block height %v with Block hash %v is not one greater than the current height %v", b.Header.Height, b.Hash(BlockHasher{}), v.bc.Height())
+		return fmt.Errorf("block (%s) with height (%d) is too high => current height (%d)", b.Hash(BlockHasher{}), b.Header.Height, v.bc.Height())
 	}
 
 	//getting headers for current block

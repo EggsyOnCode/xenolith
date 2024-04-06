@@ -24,8 +24,9 @@ func NewRPCMsg(from NetAddr, payload []byte) *RPC {
 type MessageType byte
 
 const (
-	MessageTypeTx    MessageType = 0x1
-	MessageTypeBlock MessageType = 0x2
+	MessageTypeTx        MessageType = 0x1
+	MessageTypeBlock     MessageType = 0x2
+	MessageTypeGetBlocks MessageType = 0x3
 )
 
 type Message struct {
