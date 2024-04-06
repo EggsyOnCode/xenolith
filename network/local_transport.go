@@ -45,17 +45,20 @@ func (t *LocalTransport) SendMsg(addr NetAddr, payload []byte) error {
 	defer t.lock.Unlock()
 	// sending msg to peer
 	peer, ok := t.peers[addr]
-	if ok {
-		peer.consumeCh <- RPC{From: t.addr, Payload: bytes.NewReader(payload)}
-		return nil
+	if !ok {
+		return fmt.Errorf("could not send msg to unknown peer %s", addr)
 	}
-	return fmt.Errorf("peer not found")
+	peer.consumeCh <- RPC{
+		From:    t.addr,
+		Payload: bytes.NewReader(payload),
+	}
+	return nil
 
 }
 
-func (t *LocalTransport) Broadcast(payload []byte) error{
-	for _, peer := range t.peers{
-		if err := t.SendMsg(peer.Addr(), payload); err !=nil{
+func (t *LocalTransport) Broadcast(payload []byte) error {
+	for _, peer := range t.peers {
+		if err := t.SendMsg(peer.Addr(), payload); err != nil {
 			return err
 		}
 	}

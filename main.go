@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -13,26 +14,45 @@ import (
 )
 
 func main() {
-	tr := network.NewLocalTransport(":3000")
-	rt := network.NewLocalTransport(":4000")
-	tr.Connect(rt)
-	rt.Connect(tr)
+	localT := network.NewLocalTransport("LOCAL")
+	remoteA := network.NewLocalTransport("Remote_A")
+	remoteB := network.NewLocalTransport("Remote_B")
+	remoteC := network.NewLocalTransport("Remote_C")
+	localT.Connect(remoteA)
+	remoteA.Connect(remoteB)
+	remoteA.Connect(remoteC)
+	remoteA.Connect(localT)
+
+	initRemoteServers([]network.Transport{remoteA, remoteB, remoteC})
 
 	go func() {
 		for {
 			//local transport sending to remote transport
-			if err := sendTx(rt, tr); err != nil {
+			if err := sendTx(remoteA, localT.Addr()); err != nil {
 				logrus.Error(err)
 			}
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 		}
 	}()
 
 	//validator node
 	pk := crypto_lib.GeneratePrivateKey()
+	localServer := makeServer(localT, pk, "LOCAL_SERVER")
+	localServer.Start()
+}
+
+func initRemoteServers(tr []network.Transport) {
+	for i := 0; i < len(tr); i++ {
+		id := fmt.Sprintf("REMOTE_%d", i)
+		server := makeServer(tr[i], nil, id)
+		go server.Start()
+	}
+}
+
+func makeServer(transport network.Transport, pk *crypto_lib.PrivateKey, id string) *network.Server {
 	serverOpts := network.ServerOpts{
-		ID:           "local",
-		Transporters: []network.Transport{tr},
+		ID:           id,
+		Transporters: []network.Transport{transport},
 		BlockTime:    5 * time.Second,
 		PrivateKey:   pk,
 	}
@@ -40,11 +60,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server.Start()
-	select {}
+	return server
 }
 
-func sendTx(tr network.Transport, to network.Transport) error {
+func sendTx(localT network.Transport, to network.NetAddr) error {
 	pk := crypto_lib.GeneratePrivateKey()
 	tx := core.NewTransaction([]byte(RandString(10)))
 	tx.Sign(pk)
@@ -55,7 +74,7 @@ func sendTx(tr network.Transport, to network.Transport) error {
 		return err
 	}
 	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
-	return tr.SendMsg(to.Addr(), msg.Bytes())
+	return localT.SendMsg(to, msg.Bytes())
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

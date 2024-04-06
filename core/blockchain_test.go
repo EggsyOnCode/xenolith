@@ -1,9 +1,11 @@
 package core
 
 import (
+	"os"
 	"testing"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
+	"github.com/go-kit/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -58,7 +60,8 @@ func TestGetHeaders(t *testing.T) {
 
 func newBlockchainWithGenesis(t *testing.T) *Blockchain {
 	block := randomBlockWithSignature(t, 1, core_types.Hash{})
-	bc, err := NewBlockchain(block)
+	logger := log.NewLogfmtLogger(os.Stderr)
+	bc, err := NewBlockchain(block, logger)
 	assert.Nil(t, err)
 	return bc
 }

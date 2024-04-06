@@ -48,7 +48,7 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		opts.Logger = log.With(opts.Logger, "ID", opts.ID)
 	}
 
-	newChain, err := core.NewBlockchain(genesisBlock())
+	newChain, err := core.NewBlockchain(genesisBlock(), opts.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -111,17 +111,24 @@ func (s *Server) validatorLoop() {
 func (s *Server) createNewBlock() error {
 	//fetch current block;s headers
 	currentHedaer, err := s.chain.GetHeaders(s.chain.Height())
-	if err!=nil{
+	if err != nil {
 		return err
 	}
+	// For now are including all hte tx in the mempoool in the block
+	// later we can introduce a complexity func to  detemrine how many tx to be
+	// include in one block
+	txx := s.memPool.Transactions()
 
-	block, err := core.NewBlockFromPrevHeader(currentHedaer, nil)
-	if err != nil{
+	block, err := core.NewBlockFromPrevHeader(currentHedaer, txx)
+	if err != nil {
 		return err
 	}
 
 	//signing the block
 	block.Sign(s.PrivateKey)
+
+	//clearing the whole mempool
+	s.memPool.Flush()
 
 	return s.chain.AddBlock(block)
 }
@@ -170,6 +177,18 @@ func (s *Server) broadcast(payload []byte) error {
 	return nil
 }
 
+//broadcast block to peers to share the updated state of the chain
+func (s *Server) broadcastBlock(b *core.Block) error{
+	// buf := &bytes.Buffer{}
+	// if err := b.Encode(core.NewGobBlockEncoder(buf)); err != nil {
+	// 	return err
+	// }
+
+	// msg := NewMessage(MessageTypeBlock, buf.Bytes())
+	// return s.broadcast(msg.Bytes())
+	return nil
+} 
+
 func (s *Server) broadcastTx(tx *core.Transaction) error {
 	buf := &bytes.Buffer{}
 	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
@@ -204,7 +223,7 @@ func genesisBlock() *core.Block {
 		Version:   1,
 		Height:    0,
 		DataHash:  core_types.Hash{},
-		Timestamp: uint64(time.Now().UnixNano()),
+		Timestamp: 000000,
 	}
 
 	return core.NewBlock(headers, nil)

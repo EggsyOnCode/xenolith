@@ -17,6 +17,10 @@ type Decoder[T any] interface {
 type BlockEncoder struct{}
 type BlockDecoder struct{}
 
+
+
+
+
 type GobTxEncoder struct {
 	writer io.Writer
 }

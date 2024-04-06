@@ -51,6 +51,5 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 	if err := b.Verify(); err != nil {
 		return err
 	}
-	fmt.Println("verified block")
 	return nil
 }

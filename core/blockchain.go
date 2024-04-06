@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/go-kit/log"
 )
 
 type Blockchain struct {
+	logger    log.Logger
 	lock      sync.Mutex
 	headers   []*Header
 	store     Storage
@@ -15,10 +16,11 @@ type Blockchain struct {
 }
 
 // Constructor for Blockchain
-func NewBlockchain(genesis *Block) (*Blockchain, error) {
+func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 	bc := &Blockchain{
 		headers: []*Header{},
 		store:   NewMemoryStore(),
+		logger: logger,
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -44,7 +46,6 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("adding a new blokc...")
 
 	//adding the block headers to blockchain headers list
 	bc.lock.Lock()
@@ -53,10 +54,12 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 	//add block to the chain via Put method of store
 	bc.store.Put(b)
 
-	logrus.WithFields(logrus.Fields{
-		"height": b.Header.Height,
-		"hash":   b.Hash(BlockHasher{}),
-	}).Info("Added block to blockchain")
+	bc.logger.Log(
+		"msg", "added new block to the chain",
+		"hash", b.Hash(BlockHasher{}),
+		"height", b.Header.Height,
+		"transactions", len(b.Transactions),
+	)
 
 	return nil
 }
@@ -93,4 +96,8 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 
 func (bc *Blockchain) HasBlock(height uint32) bool {
 	return height <= bc.Height()
+}
+
+func (bc *Blockchain) SetLogger(l log.Logger) {
+	bc.logger = l
 }

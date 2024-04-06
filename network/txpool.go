@@ -33,6 +33,11 @@ func (p *TxPool) Add(tx *core.Transaction) error {
 	return nil
 }
 
+func (p *TxPool) Transactions() []*core.Transaction {
+	s := NewTxMapSorter(p.transactions)
+	return s.transactions
+}
+
 func (p *TxPool) Has(hash core_types.Hash) bool {
 	_, ok := p.transactions[hash]
 	return ok
