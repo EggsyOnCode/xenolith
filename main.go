@@ -74,7 +74,7 @@ func makeServer(transport network.Transport, pk *crypto_lib.PrivateKey, id strin
 
 func sendTx(localT network.Transport, to network.NetAddr) error {
 	pk := crypto_lib.GeneratePrivateKey()
-	tx := core.NewTransaction([]byte(RandString(10)))
+	tx := core.NewTransaction([]byte{0x0a, 0x01, 0x0a, 0x02 ,0x0b})
 	tx.Sign(pk)
 	tx.SetTimeStamp(time.Now().Unix())
 

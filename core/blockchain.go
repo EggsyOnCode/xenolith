@@ -47,6 +47,18 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 		return err
 	}
 
+	//run the block data i.e the code on the VM
+	for _, tx := range b.Transactions {
+		bc.logger.Log("msg", "executing code", "tx", tx.Hash(&TxHasher{}), "len of the data", len(tx.Data))
+		vm := NewVM(tx.Data)
+		if err := vm.Run(); err != nil {
+			return err
+		}
+
+		bc.logger.Log("vm result", vm.stack[vm.sp])
+	}
+
+
 	//adding the block headers to blockchain headers list
 	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)
