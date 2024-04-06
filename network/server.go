@@ -131,7 +131,11 @@ func (s *Server) createNewBlock() error {
 	// Right now "normal nodes" do not have their pending pool cleared.
 	s.memPool.ClearPending()
 
-	return s.chain.AddBlock(block)
+	if err:=s.chain.AddBlock(block); err !=nil{
+		return err
+	}
+
+	return s.broadcastBlock(block)
 }
 
 // process Msg acts as the router routing the deocded msg to their appropriate handlers
@@ -140,8 +144,22 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 	case *core.Transaction:
 		//where t is essentially the msg.Data
 		return s.processTx(t)
+	case *core.Block:
+		return s.processBlock(t)
 	}
 
+	return nil
+}
+
+func (s *Server) processBlock(b *core.Block) error {
+	if err := s.chain.AddBlock(b); err != nil {
+		return err
+	}
+
+	s.Logger.Log("msg", "received block from peers", "block hash", core.BlockHasher{}.Hash(b.Header), "chain height", s.chain.Height())
+	go s.broadcastBlock(b)
+
+	//do we add this recevied block to our chain or not? TODO
 	return nil
 }
 
@@ -181,14 +199,13 @@ func (s *Server) broadcast(payload []byte) error {
 
 // broadcast block to peers to share the updated state of the chain
 func (s *Server) broadcastBlock(b *core.Block) error {
-	// buf := &bytes.Buffer{}
-	// if err := b.Encode(core.NewGobBlockEncoder(buf)); err != nil {
-	// 	return err
-	// }
+	buf := &bytes.Buffer{}
+	if err := b.Encode(core.NewGobBlockEncoder(buf)); err != nil {
+		return err
+	}
 
-	// msg := NewMessage(MessageTypeBlock, buf.Bytes())
-	// return s.broadcast(msg.Bytes())
-	return nil
+	msg := NewMessage(MessageTypeBlock, buf.Bytes())
+	return s.broadcast(msg.Bytes())
 }
 
 func (s *Server) broadcastTx(tx *core.Transaction) error {

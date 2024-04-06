@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"
@@ -66,6 +67,18 @@ func TestSignAndVerifyBlock(t *testing.T) {
 
 	err = block.Verify()
 	assert.Nil(t, err)
+}
+
+func TestCodecBlock(t *testing.T) {
+	block := randomBlockWithSignature(t, 1, core_types.GenerateRandomHash(32))
+	buf := &bytes.Buffer{}
+	assert.Nil(t, block.Encode(NewGobBlockEncoder(buf)))
+
+	blockDecoded := new(Block)
+	assert.Nil(t, blockDecoded.Decode(NewGobBlockDecoder(buf)))
+
+	assert.Equal(t, block.Header, blockDecoded.Header)
+
 }
 
 // func TestVerifyFail(t *testing.T){

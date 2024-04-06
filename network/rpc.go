@@ -71,8 +71,8 @@ func DefaultRPCDecodeFunc(rpc RPC) (*DecodedMsg, error) {
 
 	// to print out the incoming msg type and the origin
 	logrus.WithFields(logrus.Fields{
-		"from" : rpc.From,
-		"type" : msg.Headers,
+		"from": rpc.From,
+		"type": msg.Headers,
 	}).Debug("incoming message")
 
 	switch msg.Headers {
@@ -86,6 +86,16 @@ func DefaultRPCDecodeFunc(rpc RPC) (*DecodedMsg, error) {
 		return &DecodedMsg{
 			From: rpc.From,
 			Data: tx,
+		}, nil
+	case MessageTypeBlock:
+		block := new(core.Block)
+		if err := block.Decode(core.NewGobBlockDecoder(bytes.NewReader(msg.Data))); err != nil {
+			return nil, err
+		}
+
+		return &DecodedMsg{
+			From: rpc.From,
+			Data: block,
 		}, nil
 	default:
 		fmt.Println(msg)

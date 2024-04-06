@@ -14,12 +14,33 @@ type Decoder[T any] interface {
 }
 
 // Concrete Implementation/ Strategies for Encoder and Decoder
-type BlockEncoder struct{}
-type BlockDecoder struct{}
+type GobBlockEncoder struct {
+	w io.Writer
+}
 
+type GobBlockDecoder struct {
+	r io.Reader
+}
 
+func NewGobBlockEncoder(w io.Writer) *GobBlockEncoder {
+	return &GobBlockEncoder{
+		w: w,
+	}
+}
 
+func NewGobBlockDecoder(r io.Reader) *GobBlockDecoder {
+	return &GobBlockDecoder{
+		r: r,
+	}
+}
 
+func (g GobBlockEncoder) Encode(b *Block) error {
+	return gob.NewEncoder(g.w).Encode(b)
+}
+
+func (g GobBlockDecoder) Decode(b *Block) error {
+	return gob.NewDecoder(g.r).Decode(b)
+}
 
 type GobTxEncoder struct {
 	writer io.Writer
@@ -49,4 +70,8 @@ func NewGobTxDecoder(r io.Reader) *GobTxDecoder {
 // decode encoded tx
 func (g GobTxDecoder) Decode(tx *Transaction) error {
 	return gob.NewDecoder(g.reader).Decode(tx)
+}
+
+func init() {
+	gob.Register(elliptic.P256())
 }
