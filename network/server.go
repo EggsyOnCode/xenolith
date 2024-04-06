@@ -58,7 +58,7 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		chain:       newChain,
 		isValidator: opts.PrivateKey != nil,
 		quitCh:      make(chan struct{}),
-		memPool:     NewTxPool(),
+		memPool:     NewTxPool(1000),
 	}
 
 	// if the rpc processor has not been defined; then we can assume that the server itself is the processor
@@ -117,7 +117,7 @@ func (s *Server) createNewBlock() error {
 	// For now are including all hte tx in the mempoool in the block
 	// later we can introduce a complexity func to  detemrine how many tx to be
 	// include in one block
-	txx := s.memPool.Transactions()
+	txx := s.memPool.Pending()
 
 	block, err := core.NewBlockFromPrevHeader(currentHedaer, txx)
 	if err != nil {
@@ -127,8 +127,9 @@ func (s *Server) createNewBlock() error {
 	//signing the block
 	block.Sign(s.PrivateKey)
 
-	//clearing the whole mempool
-	s.memPool.Flush()
+	// TODO: pending pool of tx should only reflect on validator nodes.
+	// Right now "normal nodes" do not have their pending pool cleared.
+	s.memPool.ClearPending()
 
 	return s.chain.AddBlock(block)
 }
@@ -148,7 +149,7 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 func (s *Server) processTx(tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
-	if s.memPool.Has(hash) {
+	if s.memPool.Contains(hash) {
 		return nil
 	}
 
@@ -160,11 +161,12 @@ func (s *Server) processTx(tx *core.Transaction) error {
 	//setting the timestamp for the incoming tx
 	tx.SetTimeStamp(time.Now().Unix())
 
-	s.Logger.Log("msg", "adding new tx to the mempool", "hash", hash, "memPool len", s.memPool.Len())
+	s.Logger.Log("msg", "adding new tx to the mempool", "hash", hash, "memPool pending", s.memPool.PendingCount())
 
 	go s.broadcastTx(tx)
 
-	return s.memPool.Add(tx)
+	s.memPool.Add(tx)
+	return nil
 }
 
 func (s *Server) broadcast(payload []byte) error {
@@ -177,8 +179,8 @@ func (s *Server) broadcast(payload []byte) error {
 	return nil
 }
 
-//broadcast block to peers to share the updated state of the chain
-func (s *Server) broadcastBlock(b *core.Block) error{
+// broadcast block to peers to share the updated state of the chain
+func (s *Server) broadcastBlock(b *core.Block) error {
 	// buf := &bytes.Buffer{}
 	// if err := b.Encode(core.NewGobBlockEncoder(buf)); err != nil {
 	// 	return err
@@ -187,7 +189,7 @@ func (s *Server) broadcastBlock(b *core.Block) error{
 	// msg := NewMessage(MessageTypeBlock, buf.Bytes())
 	// return s.broadcast(msg.Bytes())
 	return nil
-} 
+}
 
 func (s *Server) broadcastTx(tx *core.Transaction) error {
 	buf := &bytes.Buffer{}

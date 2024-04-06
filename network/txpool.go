@@ -1,80 +1,125 @@
 package network
 
 import (
-	"sort"
+	"sync"
 
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/core_types"
 )
 
 type TxPool struct {
-	//mapping of transaction hash to transaction
-	transactions map[core_types.Hash]*core.Transaction
+	all     *TxSortedMap
+	pending *TxSortedMap
+	// The maxLength of the total pool of transactions.
+	// When the pool is full we will prune the oldest transaction.
+	maxLength int
 }
 
-func NewTxPool() *TxPool {
+func NewTxPool(maxLength int) *TxPool {
 	return &TxPool{
-		transactions: make(map[core_types.Hash]*core.Transaction),
+		all:       NewTxSortedMap(),
+		pending:   NewTxSortedMap(),
+		maxLength: maxLength,
 	}
 }
 
-func (p *TxPool) Len() int {
-	return (len(p.transactions))
+func (p *TxPool) Add(tx *core.Transaction) {
+	// prune the oldest transaction that is sitting in the all pool
+	if p.all.Count() == p.maxLength {
+		oldest := p.all.First()
+		p.all.Remove(oldest.Hash(core.TxHasher{}))
+	}
+
+	if !p.all.Contains(tx.Hash(core.TxHasher{})) {
+		p.all.Add(tx)
+		p.pending.Add(tx)
+	}
 }
 
-func (p *TxPool) Flush() {
-	p.transactions = make(map[core_types.Hash]*core.Transaction)
+func (p *TxPool) Contains(hash core_types.Hash) bool {
+	return p.all.Contains(hash)
 }
 
-// Add adds a transaction to the pool; the responsibilty of checking if the tx already exists in the mempool is server's
-func (p *TxPool) Add(tx *core.Transaction) error {
-	p.transactions[tx.Hash(core.TxHasher{})] = tx
-
-	return nil
+// Pending returns a slice of transactions that are in the pending pool
+func (p *TxPool) Pending() []*core.Transaction {
+	return p.pending.txx.Data
 }
 
-func (p *TxPool) Transactions() []*core.Transaction {
-	s := NewTxMapSorter(p.transactions)
-	return s.transactions
+func (p *TxPool) ClearPending() {
+	p.pending.Clear()
 }
 
-func (p *TxPool) Has(hash core_types.Hash) bool {
-	_, ok := p.transactions[hash]
+func (p *TxPool) PendingCount() int {
+	return p.pending.Count()
+}
+
+type TxSortedMap struct {
+	lock   sync.RWMutex
+	lookup map[core_types.Hash]*core.Transaction
+	txx    *core_types.List[*core.Transaction]
+}
+
+func NewTxSortedMap() *TxSortedMap {
+	return &TxSortedMap{
+		lookup: make(map[core_types.Hash]*core.Transaction),
+		txx:    core_types.NewList[*core.Transaction](),
+	}
+}
+
+func (t *TxSortedMap) First() *core.Transaction {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	first := t.txx.Get(0)
+	return t.lookup[first.Hash(core.TxHasher{})]
+}
+
+func (t *TxSortedMap) Get(h core_types.Hash) *core.Transaction {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.lookup[h]
+}
+
+func (t *TxSortedMap) Add(tx *core.Transaction) {
+	hash := tx.Hash(core.TxHasher{})
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if _, ok := t.lookup[hash]; !ok {
+		t.lookup[hash] = tx
+		t.txx.Insert(tx)
+	}
+}
+
+func (t *TxSortedMap) Remove(h core_types.Hash) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	t.txx.Remove(t.lookup[h])
+	delete(t.lookup, h)
+}
+
+func (t *TxSortedMap) Count() int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return len(t.lookup)
+}
+
+func (t *TxSortedMap) Contains(h core_types.Hash) bool {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	_, ok := t.lookup[h]
 	return ok
 }
 
-// TxMapSorter implements the sort.Interface for []Transaction
-// we need overrides for the Len, Less and Swap methods
-type TxMapSorter struct {
-	transactions []*core.Transaction
-}
+func (t *TxSortedMap) Clear() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
 
-func NewTxMapSorter(txx map[core_types.Hash]*core.Transaction) *TxMapSorter {
-	tMap := make([]*core.Transaction, len(txx))
-
-	i := 0
-	for _, tx := range txx {
-		tMap[i] = tx
-		i++
-	}
-
-	s := &TxMapSorter{
-		transactions: tMap,
-	}
-
-	sort.Sort(s)
-	return s
-}
-
-func (s *TxMapSorter) Len() int {
-	return len(s.transactions)
-}
-
-func (s *TxMapSorter) Less(i, j int) bool {
-	return s.transactions[i].TimeStamp() < s.transactions[j].TimeStamp()
-}
-
-//syntax of swapping two numbers in Go
-func (s *TxMapSorter) Swap(i, j int) {
-	s.transactions[i], s.transactions[j] = s.transactions[j], s.transactions[i]
+	t.lookup = make(map[core_types.Hash]*core.Transaction)
+	t.txx.Clear()
 }
