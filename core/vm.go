@@ -1,16 +1,19 @@
 package core
 
+import "fmt"
+
 type Instruction byte
 
 const (
 	InstrPushInt  Instruction = 0x0a // 10
 	InstrAdd      Instruction = 0x0b // 11
-	InstrPushByte Instruction = 0x0c
-	InstrPack     Instruction = 0x0d
-	InstrSub      Instruction = 0x0e
-	InstrStore    Instruction = 0x0f
+	InstrPushByte Instruction = 0x0c // 12
+	InstrPack     Instruction = 0x0d // 13
+	InstrSub      Instruction = 0x0e // 14
+	InstrStore    Instruction = 0x0f // 15
 )
 
+// the structure is FIFO not LIFO
 type Stack struct {
 	data []any
 	sp   int
@@ -24,15 +27,19 @@ func NewStack(size int) *Stack {
 }
 
 func (s *Stack) Push(v any) {
+	fmt.Printf("stack before push %v\n", s.data)
 	s.data[s.sp] = v
 	s.sp++
+	fmt.Printf("stack after push %v\n", s.data)
 }
 
 func (s *Stack) Pop() any {
+	fmt.Printf("stack before pop %v\n", s.data)
 	value := s.data[0]
 	s.data = append(s.data[:0], s.data[1:]...)
 	s.sp--
 
+	fmt.Printf("stack after pop %v\n", s.data)
 	return value
 }
 
@@ -90,6 +97,12 @@ func (vm *VM) Exec(instr Instruction) error {
 		a := vm.stack.Pop().(int)
 		b := vm.stack.Pop().(int)
 		c := a + b
+		vm.stack.Push(c)
+
+	case InstrSub:
+		a := vm.stack.Pop().(int)
+		b := vm.stack.Pop().(int)
+		c := a - b
 		vm.stack.Push(c)
 	}
 
