@@ -55,7 +55,7 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 			return err
 		}
 
-		bc.logger.Log("vm result", vm.stack[vm.sp])
+		bc.logger.Log("vm result", vm.stack.Pop())
 	}
 
 

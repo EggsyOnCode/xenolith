@@ -3,24 +3,44 @@ package core
 type Instruction byte
 
 const (
-	InstrPush Instruction = 0x0a //10 (0-9 are reserved for ints)
-	InstrAdd  Instruction = 0x0b //11
+	InstrPushInt Instruction = 0x0a //10 (0-9 are reserved for ints)
+	InstrAdd     Instruction = 0x0b //11
 )
 
+type Stack struct {
+	data []any
+	sp   int
+}
+
+func NewStack(size int) *Stack {
+	return &Stack{
+		data: make([]any, size),
+		sp:   0,
+	}
+}
+func (s *Stack) Push(v any) {
+	s.data[s.sp] = v
+	s.sp++
+}
+
+func (s *Stack) Pop() any {
+	value := s.data[0]
+	s.data = append(s.data[:0], s.data[1:]...)
+	s.sp--
+	return value
+}
+
 type VM struct {
-	data []byte
-	ip   int //instruction pointer
-	//we could develop our own pkg for struct
-	stack []byte
-	sp    int //stack pointer
+	data  []byte
+	ip    int //instruction pointer
+	stack *Stack
 }
 
 func NewVM(data []byte) *VM {
 	return &VM{
 		data:  data,
 		ip:    0,
-		stack: make([]byte, 1024),
-		sp:    -1,
+		stack: NewStack(100),
 	}
 }
 
@@ -41,23 +61,15 @@ func (vm *VM) Run() error {
 
 func (vm *VM) Exec(instr Instruction) error {
 	switch instr {
-	case (InstrPush):
-		vm.pushStack(vm.data[vm.ip+1])
+	case (InstrPushInt):
+		//we have to explicity convert byte to int
+		vm.stack.Push(int(vm.data[vm.ip+1]))
 	case (InstrAdd):
-		vm.AddOp()
+		a := vm.stack.Pop().(int)
+		b := vm.stack.Pop().(int)
+		c := a + b
+		vm.stack.Push(c)
 	}
 
 	return nil
-}
-func (vm *VM) pushStack(v byte) {
-	vm.sp++
-	vm.stack[vm.sp] = v
-}
-
-func (vm *VM) AddOp() {
-	a := vm.stack[vm.sp-1]
-	b := vm.stack[vm.sp]
-	c := a + b
-	vm.sp++
-	vm.stack[vm.sp] = c
 }
