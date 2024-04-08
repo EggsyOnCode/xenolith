@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 type Instruction byte
@@ -28,8 +29,11 @@ func NewStack(size int) *Stack {
 	}
 }
 
+// strings will be stored in reverse order
 func (s *Stack) Push(v any) {
-	s.data[s.sp] = v
+	// inserting item to the top of the stack
+	// stack will grow from r->l
+	s.data = append([]any{v}, s.data...)
 	s.sp++
 }
 
@@ -37,6 +41,7 @@ func (s *Stack) Pop() any {
 	value := s.data[0]
 	s.data = append(s.data[:0], s.data[1:]...)
 	s.sp--
+	fmt.Printf("popped value is %v\n", value)
 
 	return value
 }
@@ -91,7 +96,9 @@ func (vm *VM) Exec(instr Instruction) error {
 			b[i] = vm.stack.Pop().(byte)
 		}
 
-		vm.stack.Push(b)
+		reverseByteOrder := ReverseByteOrder(b)
+
+		vm.stack.Push(reverseByteOrder)
 
 	case InstrAdd:
 		a := vm.stack.Pop().(int)
@@ -136,4 +143,11 @@ func serializeInt64(val int64) []byte {
 func DeserializeInt64(b []byte) int64 {
 	val := binary.LittleEndian.Uint64(b)
 	return int64(val)
+}
+
+func ReverseByteOrder(b []byte) []byte {
+	for i := 0; i < len(b)/2; i++ {
+		b[i], b[len(b)-i-1] = b[len(b)-i-1], b[i]
+	}
+	return b
 }
