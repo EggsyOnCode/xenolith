@@ -60,8 +60,10 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 		if err := vm.Run(); err != nil {
 			return err
 		}
-		fmt.Printf("%+v\n", vm.contractState)
-
+		fmt.Printf("STATE : %+v\n", vm.contractState)
+		result := vm.stack.Pop()
+		fmt.Printf("VM : %+v\n", result)
+		
 	}
 
 	//adding the block headers to blockchain headers list

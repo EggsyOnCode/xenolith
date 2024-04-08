@@ -74,8 +74,8 @@ func makeServer(transport network.Transport, pk *crypto_lib.PrivateKey, id strin
 
 func sendTx(localT network.Transport, to network.NetAddr) error {
 	pk := crypto_lib.GeneratePrivateKey()
-	data := []byte{0x03, 0x0a, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x0d, 0x05, 0x0a, 0x0f}
-	tx := core.NewTransaction(data)
+	// data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
+	tx := core.NewTransaction(contract())
 	tx.Sign(pk)
 	tx.SetTimeStamp(time.Now().Unix())
 
@@ -85,6 +85,14 @@ func sendTx(localT network.Transport, to network.NetAddr) error {
 	}
 	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
 	return localT.SendMsg(to, msg.Bytes())
+}
+
+func contract() []byte {
+	dataKey := []byte{0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d}
+	data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
+
+	data = append(data, dataKey...)
+	return data
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

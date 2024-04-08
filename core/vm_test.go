@@ -55,20 +55,39 @@ func TestVMStrings(t *testing.T) {
 func TestVMState(t *testing.T) {
 	// FOO : key
 	// serializedInt as value
-	data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d} // ,  0x0f}
+	data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
 	contractState := NewState()
 	vm := NewVM(data, contractState)
+
+	assert.Nil(t, vm.Run())
+	conState, err := contractState.Get([]byte("FOO"))
+	assert.Nil(t, err)
+	conVal := DeserializeInt64(conState)
+	fmt.Printf("vm stack data %+v\n", vm.stack.data)
+	fmt.Printf("contract state value %+v\n", contractState)
+
+	assert.Equal(t, int64(7), conVal)
+}
+
+func TestGetVM(t *testing.T) {
+	dataKey := []byte{0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d}
+	// dataVal := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b}
+	data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
+	contractState := NewState()
+	vm := NewVM(data, contractState)
+	vm.data = append(vm.data, dataKey...)
+	vm.data = append(vm.data, 0x1a)
 
 	assert.Nil(t, vm.Run())
 	// conState, err := contractState.Get([]byte("FOO"))
 	// assert.Nil(t, err)
 	// conVal := DeserializeInt64(conState)
-	fmt.Printf("vm stack data %+v\n", vm.stack.data)
-	fmt.Printf("contract state value %+v\n", contractState)
+	// fmt.Printf("vm stack data %+v\n", vm.stack.data)
+	// fmt.Printf("contract state value %+v\n", contractState)
+	// assert.Equal(t, int64(7), conVal)
 
-	// assert.Equal(t, int64(5), conVal)
-}
-
-func TestByteReversal(t *testing.T) {
+	fmt.Printf("vm stack data again %+v\n", vm.stack.data)
+	conVal := DeserializeInt64(vm.stack.Pop().([]byte))
+	assert.Equal(t, int64(7), conVal)
 
 }

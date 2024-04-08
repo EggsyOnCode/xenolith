@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/binary"
-	"fmt"
 )
 
 type Instruction byte
@@ -14,6 +13,7 @@ const (
 	InstrPack     Instruction = 0x0d // 13
 	InstrSub      Instruction = 0x0e // 14
 	InstrStore    Instruction = 0x0f // 15
+	InstrGet      Instruction = 0x1a
 )
 
 // the structure is FIFO not LIFO
@@ -41,7 +41,6 @@ func (s *Stack) Pop() any {
 	value := s.data[0]
 	s.data = append(s.data[:0], s.data[1:]...)
 	s.sp--
-	fmt.Printf("popped value is %v\n", value)
 
 	return value
 }
@@ -98,6 +97,7 @@ func (vm *VM) Exec(instr Instruction) error {
 
 		reverseByteOrder := ReverseByteOrder(b)
 
+		//byte order being reversed to store strings in the correct order (not in the order in which they were pushed to the stack)
 		vm.stack.Push(reverseByteOrder)
 
 	case InstrAdd:
@@ -127,6 +127,13 @@ func (vm *VM) Exec(instr Instruction) error {
 		// fmt.Printf("%v\n", value)
 
 		vm.contractState.Put(key, serializedVal)
+	case InstrGet:
+		key := vm.stack.Pop().([]byte)
+		value, err := vm.contractState.Get(key)
+		if err != nil {
+			return err
+		}
+		vm.stack.Push(value)
 	}
 
 	return nil
