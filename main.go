@@ -35,14 +35,14 @@ func main() {
 		}
 	}()
 
-	go func() {
-		time.Sleep(7 * time.Second)
-		trLate := network.NewLocalTransport("TR_LATE")
-		remoteC.Connect(trLate)
-		trLateServer := makeServer(trLate, nil, "TR_LATE_SERVER")
+	// go func() {
+	// 	time.Sleep(7 * time.Second)
+	// 	trLate := network.NewLocalTransport("TR_LATE")
+	// 	remoteC.Connect(trLate)
+	// 	trLateServer := makeServer(trLate, nil, "TR_LATE_SERVER")
 
-		go trLateServer.Start()
-	}()
+	// 	go trLateServer.Start()
+	// }()
 
 	//validator node
 	pk := crypto_lib.GeneratePrivateKey()
@@ -74,7 +74,8 @@ func makeServer(transport network.Transport, pk *crypto_lib.PrivateKey, id strin
 
 func sendTx(localT network.Transport, to network.NetAddr) error {
 	pk := crypto_lib.GeneratePrivateKey()
-	tx := core.NewTransaction([]byte{0x0a, 0x01, 0x0a, 0x02 ,0x0b})
+	data := []byte{0x03, 0x0a, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x0d, 0x05, 0x0a, 0x0f}
+	tx := core.NewTransaction(data)
 	tx.Sign(pk)
 	tx.SetTimeStamp(time.Now().Unix())
 

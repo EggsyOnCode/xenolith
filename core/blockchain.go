@@ -13,14 +13,18 @@ type Blockchain struct {
 	headers   []*Header
 	store     Storage
 	Validator Validator
+	//to store the state of all the smart contracts on the blockchain
+	//TODO implement an interface for the State
+	contractState *State
 }
 
 // Constructor for Blockchain
 func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 	bc := &Blockchain{
-		headers: []*Header{},
-		store:   NewMemoryStore(),
-		logger: logger,
+		contractState: NewState(),
+		headers:       []*Header{},
+		store:         NewMemoryStore(),
+		logger:        logger,
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -50,14 +54,15 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 	//run the block data i.e the code on the VM
 	for _, tx := range b.Transactions {
 		bc.logger.Log("msg", "executing code", "tx", tx.Hash(&TxHasher{}), "len of the data", len(tx.Data))
-		vm := NewVM(tx.Data)
+
+		vm := NewVM(tx.Data, bc.contractState)
+
 		if err := vm.Run(); err != nil {
 			return err
 		}
+		fmt.Printf("%+v\n", vm.contractState)
 
-		bc.logger.Log("vm result", vm.stack.Pop())
 	}
-
 
 	//adding the block headers to blockchain headers list
 	bc.lock.Lock()

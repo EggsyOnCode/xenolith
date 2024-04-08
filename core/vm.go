@@ -1,6 +1,8 @@
 package core
 
-import "fmt"
+import (
+	"encoding/binary"
+)
 
 type Instruction byte
 
@@ -27,33 +29,31 @@ func NewStack(size int) *Stack {
 }
 
 func (s *Stack) Push(v any) {
-	fmt.Printf("stack before push %v\n", s.data)
 	s.data[s.sp] = v
 	s.sp++
-	fmt.Printf("stack after push %v\n", s.data)
 }
 
 func (s *Stack) Pop() any {
-	fmt.Printf("stack before pop %v\n", s.data)
 	value := s.data[0]
 	s.data = append(s.data[:0], s.data[1:]...)
 	s.sp--
 
-	fmt.Printf("stack after pop %v\n", s.data)
 	return value
 }
 
 type VM struct {
-	data  []byte
-	ip    int // instruction pointer
-	stack *Stack
+	data          []byte
+	ip            int // instruction pointer
+	stack         *Stack
+	contractState *State
 }
 
-func NewVM(data []byte) *VM {
+func NewVM(data []byte, contractState *State) *VM {
 	return &VM{
-		data:  data,
-		ip:    0,
-		stack: NewStack(128),
+		data:          data,
+		contractState: contractState,
+		ip:            0,
+		stack:         NewStack(128),
 	}
 }
 
@@ -104,7 +104,36 @@ func (vm *VM) Exec(instr Instruction) error {
 		b := vm.stack.Pop().(int)
 		c := a - b
 		vm.stack.Push(c)
+	case InstrStore:
+		key := vm.stack.Pop().([]byte)
+		value := vm.stack.Pop()
+		var serializedVal []byte
+
+		switch t := value.(type) {
+		case int:
+			serializedVal = serializeInt64(int64(t))
+		default:
+			panic("TODO: implement serialization for other types")
+		}
+
+		// fmt.Printf("%v\n", key)
+		// fmt.Printf("%v\n", value)
+
+		vm.contractState.Put(key, serializedVal)
 	}
 
 	return nil
+}
+
+func serializeInt64(val int64) []byte {
+	// 8 byte long byte slice
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(val))
+
+	return buf
+}
+
+func DeserializeInt64(b []byte) int64 {
+	val := binary.LittleEndian.Uint64(b)
+	return int64(val)
 }
