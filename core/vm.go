@@ -2,10 +2,12 @@ package core
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 type Instruction byte
 
+// list of allowed op codes
 const (
 	InstrPushInt  Instruction = 0x0a // 10
 	InstrAdd      Instruction = 0x0b // 11
@@ -14,6 +16,8 @@ const (
 	InstrSub      Instruction = 0x0e // 14
 	InstrStore    Instruction = 0x0f // 15
 	InstrGet      Instruction = 0x1a
+	InstrMul      Instruction = 0x1b
+	InstrDiv      Instruction = 0x1c
 )
 
 // the structure is FIFO not LIFO
@@ -104,6 +108,22 @@ func (vm *VM) Exec(instr Instruction) error {
 		a := vm.stack.Pop().(int)
 		b := vm.stack.Pop().(int)
 		c := a + b
+		vm.stack.Push(c)
+
+	case InstrMul:
+		a := vm.stack.Pop().(int)
+		b := vm.stack.Pop().(int)
+		c := a * b
+		vm.stack.Push(c)
+	case InstrDiv:
+
+		//the divisor thhen teh dividend
+		b := vm.stack.Pop().(int)
+		a := vm.stack.Pop().(int)
+		if b == 0 {
+			return fmt.Errorf("division by zero")
+		}
+		c := a / b
 		vm.stack.Push(c)
 
 	case InstrSub:

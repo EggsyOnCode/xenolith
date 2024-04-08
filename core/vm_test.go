@@ -23,6 +23,24 @@ func TestVMAdd(t *testing.T) {
 	assert.Equal(t, 3, vm.stack.Pop())
 }
 
+func TestVMMul(t *testing.T) {
+	contractState := NewState()
+	vm := NewVM([]byte{0x02, 0x0a, 0x04, 0x0a, 0x1b}, contractState)
+
+	log.Printf("VM processing data : %v", vm.data)
+	assert.Nil(t, vm.Run())
+	fmt.Printf("Stack: %v\n", vm.stack)
+	assert.Equal(t, 8, vm.stack.Pop().(int))
+}
+func TestVMDiv(t *testing.T) {
+	contractState := NewState()
+	vm := NewVM([]byte{0x08, 0x0a, 0x02, 0x0a, 0x1c}, contractState)
+
+	log.Printf("VM processing data : %v", vm.data)
+	assert.Nil(t, vm.Run())
+	fmt.Printf("Stack: %v\n", vm.stack)
+	assert.Equal(t, 4, vm.stack.Pop())
+}
 func TestVMByte(t *testing.T) {
 	data := []byte{0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d}
 	contractState := NewState()
