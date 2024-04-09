@@ -8,6 +8,7 @@ import (
 )
 
 type Blockchain struct {
+	Version   uint32
 	logger    log.Logger
 	lock      sync.Mutex
 	headers   []*Header
@@ -25,6 +26,7 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		headers:       []*Header{},
 		store:         NewMemoryStore(),
 		logger:        logger,
+		Version:       1,
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -63,7 +65,7 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 		// fmt.Printf("STATE : %+v\n", vm.contractState)
 		result := vm.stack.Pop()
 		fmt.Printf("VM : %+v\n", result)
-		
+
 	}
 
 	//adding the block headers to blockchain headers list
@@ -120,4 +122,3 @@ func (bc *Blockchain) HasBlock(height uint32) bool {
 func (bc *Blockchain) SetLogger(l log.Logger) {
 	bc.logger = l
 }
-

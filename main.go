@@ -62,6 +62,7 @@ func initRemoteServers(tr []network.Transport) {
 
 func makeServer(transport network.Transport, pk *crypto_lib.PrivateKey, id string) *network.Server {
 	serverOpts := network.ServerOpts{
+		Transport:    transport,
 		ID:           id,
 		Transporters: []network.Transport{transport},
 		BlockTime:    5 * time.Second,

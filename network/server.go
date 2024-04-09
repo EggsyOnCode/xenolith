@@ -18,6 +18,7 @@ var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
 	ID            string
+	Transport     Transport
 	Logger        log.Logger
 	RPCDecodeFunc RPCDecodeFunc
 	RPCProcessor  RPCProcessor
@@ -168,7 +169,8 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 // when the server receives a req from another node to send its status msg
 func (s *Server) processGetStatusMsg(from NetAddr) error {
 	for _, tr := range s.Transporters {
-		statusMsg := NewStatusMessage(s.chain.Height(), uint32(1))
+		//TODO: a way to fetch the verison of blockchain
+		statusMsg := NewStatusMessage(s.chain.Height(), s.chain.Version)
 		buf := &bytes.Buffer{}
 		if err := gob.NewEncoder(buf).Encode(statusMsg); err != nil {
 			return err
@@ -192,7 +194,7 @@ func (s *Server) processStatusMsg(from NetAddr, msg *StatusMessage) error {
 
 	// compare the msg data with the node's own bc; its height and version say
 	// cal the differences adn request the missing bits from the peer
-	
+
 	return nil
 }
 
