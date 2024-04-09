@@ -60,11 +60,21 @@ func (t *LocalTransport) Broadcast(payload []byte, excludedPeer NetAddr) error {
 	for _, peer := range t.peers {
 		if peer.Addr() == excludedPeer {
 			continue
-		}
+	}
 		if err := t.SendMsg(peer.Addr(), payload); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (t *LocalTransport) Peers() map[NetAddr]Transport {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	peers := make(map[NetAddr]Transport)
+	for k, v := range t.peers {
+		peers[k] = v
+	}
+	return peers
 }

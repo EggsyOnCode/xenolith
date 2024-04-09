@@ -7,4 +7,5 @@ type Transport interface {
 	Broadcast([]byte, NetAddr) error
 	Consume() <-chan RPC
 	Addr() NetAddr
+	Peers() map[NetAddr]Transport
 }

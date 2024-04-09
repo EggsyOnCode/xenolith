@@ -27,6 +27,8 @@ const (
 	MessageTypeTx        MessageType = 0x1
 	MessageTypeBlock     MessageType = 0x2
 	MessageTypeGetBlocks MessageType = 0x3
+	MessageStatusType    MessageType = 0x4
+	MessageGetStatusType MessageType = 0x5
 )
 
 type Message struct {
@@ -98,6 +100,25 @@ func DefaultRPCDecodeFunc(rpc RPC) (*DecodedMsg, error) {
 			From: rpc.From,
 			Data: block,
 		}, nil
+	case MessageGetStatusType:
+		return &DecodedMsg{
+			From: rpc.From,
+			Data: &GetStatusMessage{},
+		}, nil
+	case MessageStatusType:
+		statusMsg := new(StatusMessage)
+		// new decoder takes in a reader
+		// teh reader is the byte stream of the obj that has the encoded data
+		// decode takes in some structure to store the decoded data
+		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(statusMsg); err != nil {
+			return nil, err
+		}
+
+		return &DecodedMsg{
+			From: rpc.From,
+			Data: statusMsg,
+		}, nil
+
 	default:
 		fmt.Println(msg)
 		return nil, fmt.Errorf("unknown message type: %v", msg.Headers)

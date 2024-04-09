@@ -60,7 +60,7 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 		if err := vm.Run(); err != nil {
 			return err
 		}
-		fmt.Printf("STATE : %+v\n", vm.contractState)
+		// fmt.Printf("STATE : %+v\n", vm.contractState)
 		result := vm.stack.Pop()
 		fmt.Printf("VM : %+v\n", result)
 		
@@ -120,3 +120,4 @@ func (bc *Blockchain) HasBlock(height uint32) bool {
 func (bc *Blockchain) SetLogger(l log.Logger) {
 	bc.logger = l
 }
+

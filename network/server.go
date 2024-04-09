@@ -2,6 +2,7 @@ package network
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"os"
@@ -70,6 +71,15 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		go s.validatorLoop()
 	}
 
+	//send a GetMsg Request to the peers
+	go func() {
+		msg := new(GetStatusMessage)
+		buf := &bytes.Buffer{}
+		gob.NewEncoder(buf).Encode(msg)
+		rpcMsg := NewMessage(MessageGetStatusType, buf.Bytes())
+		s.broadcast(rpcMsg.Bytes(), s.Transporters[0].Addr())
+	}()
+
 	return s, nil
 }
 
@@ -131,7 +141,7 @@ func (s *Server) createNewBlock() error {
 	// Right now "normal nodes" do not have their pending pool cleared.
 	s.memPool.ClearPending()
 
-	if err:=s.chain.AddBlock(block); err !=nil{
+	if err := s.chain.AddBlock(block); err != nil {
 		return err
 	}
 
@@ -146,8 +156,43 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 		return s.processTx(t)
 	case *core.Block:
 		return s.processBlock(t, msg.From)
+	case *StatusMessage:
+		return s.processStatusMsg(msg.From, t)
+	case *GetStatusMessage:
+		return s.processGetStatusMsg(msg.From)
 	}
 
+	return nil
+}
+
+// when the server receives a req from another node to send its status msg
+func (s *Server) processGetStatusMsg(from NetAddr) error {
+	for _, tr := range s.Transporters {
+		statusMsg := NewStatusMessage(s.chain.Height(), uint32(1))
+		buf := &bytes.Buffer{}
+		if err := gob.NewEncoder(buf).Encode(statusMsg); err != nil {
+			return err
+		}
+		msg := NewMessage(MessageStatusType, buf.Bytes())
+		buffer := &bytes.Buffer{}
+		if err := gob.NewEncoder(buffer).Encode(msg); err != nil {
+			return err
+		}
+		if err := tr.SendMsg(from, buffer.Bytes()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// when the server receives a status msg response back from the nodes
+func (s *Server) processStatusMsg(from NetAddr, msg *StatusMessage) error {
+	//log it then
+	fmt.Printf("received status msg %v from => server at address %v\n", msg, from)
+
+	// compare the msg data with the node's own bc; its height and version say
+	// cal the differences adn request the missing bits from the peer
+	
 	return nil
 }
 
@@ -189,6 +234,7 @@ func (s *Server) processTx(tx *core.Transaction) error {
 }
 
 func (s *Server) broadcast(payload []byte, origin NetAddr) error {
+
 	for _, tr := range s.Transporters {
 		if err := tr.Broadcast(payload, origin); err != nil {
 			return err

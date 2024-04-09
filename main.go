@@ -15,9 +15,9 @@ import (
 
 func main() {
 	localT := network.NewLocalTransport("LOCAL")
-	remoteA := network.NewLocalTransport("Remote_A")
-	remoteB := network.NewLocalTransport("Remote_B")
-	remoteC := network.NewLocalTransport("Remote_C")
+	remoteA := network.NewLocalTransport("Remote_0")
+	remoteB := network.NewLocalTransport("Remote_1")
+	remoteC := network.NewLocalTransport("Remote_2")
 	localT.Connect(remoteA)
 	remoteA.Connect(remoteB)
 	remoteA.Connect(remoteC)
@@ -35,18 +35,20 @@ func main() {
 		}
 	}()
 
-	// go func() {
-	// 	time.Sleep(7 * time.Second)
-	// 	trLate := network.NewLocalTransport("TR_LATE")
-	// 	remoteC.Connect(trLate)
-	// 	trLateServer := makeServer(trLate, nil, "TR_LATE_SERVER")
+	go func() {
+		time.Sleep(7 * time.Second)
+		trLate := network.NewLocalTransport("TR_LATE")
+		trLateServer := makeServer(trLate, nil, "TR_LATE")
+		go trLateServer.Start()
 
-	// 	go trLateServer.Start()
-	// }()
+		// trlate needs some seed nodes
+		trLate.Connect(localT)
+		localT.Connect(trLate)
+	}()
 
 	//validator node
 	pk := crypto_lib.GeneratePrivateKey()
-	localServer := makeServer(localT, pk, "LOCAL_SERVER")
+	localServer := makeServer(localT, pk, "LOCAL")
 	localServer.Start()
 }
 
