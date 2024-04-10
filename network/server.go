@@ -47,7 +47,7 @@ func NewServer(opts ServerOpts) (*Server, error) {
 	}
 	if opts.Logger == nil {
 		opts.Logger = log.NewLogfmtLogger(os.Stderr)
-		opts.Logger = log.With(opts.Logger, "ID", opts.ID)
+		opts.Logger = log.With(opts.Logger, "address", opts.Transport.Addr())
 	}
 
 	newChain, err := core.NewBlockchain(genesisBlock(), opts.Logger)
@@ -72,14 +72,7 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		go s.validatorLoop()
 	}
 
-	//send a GetMsg Request to the peers
-	go func() {
-		msg := new(GetStatusMessage)
-		buf := &bytes.Buffer{}
-		gob.NewEncoder(buf).Encode(msg)
-		rpcMsg := NewMessage(MessageGetStatusType, buf.Bytes())
-		s.broadcast(rpcMsg.Bytes(), s.Transporters[0].Addr())
-	}()
+	s.bootstrapNodes()
 
 	return s, nil
 }
@@ -97,8 +90,15 @@ free:
 				s.Logger.Log("err", err)
 			}
 
+			switch msg.Data.(type) {
+			case *GetBlockMessage:
+				fmt.Println("GetBlockMessage received by %v from %v", s.ID, msg.From)
+			}
+
 			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
-				s.Logger.Log("err", err)
+				if err != core.ErrBlockKnown {
+					s.Logger.Log("err", err)
+				}
 			}
 		case <-s.quitCh:
 			break free
@@ -149,6 +149,23 @@ func (s *Server) createNewBlock() error {
 	return s.broadcastBlock(block, "")
 }
 
+func (s *Server) sendGetStatusMsg() error {
+	msg := new(GetStatusMessage)
+	buf := &bytes.Buffer{}
+	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
+		return err
+	}
+	rpcMsg := NewMessage(MessageGetStatusType, buf.Bytes())
+	for _, peer := range s.Transport.Peers() {
+		if err := s.Transport.SendMsg(peer.Addr(), rpcMsg.Bytes()); err != nil {
+			return err
+		}
+
+	}
+	// s.broadcast(rpcMsg.Bytes(), s.Transporters[0].Addr())
+	return nil
+}
+
 // process Msg acts as the router routing the deocded msg to their appropriate handlers
 func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 	switch t := msg.Data.(type) {
@@ -158,9 +175,15 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 	case *core.Block:
 		return s.processBlock(t, msg.From)
 	case *StatusMessage:
+		if s.Transport.Addr() == "TR_LATE" {
+			fmt.Println("TR_LATE received status msg from ", msg.From, "data", t)
+		}
 		return s.processStatusMsg(msg.From, t)
 	case *GetStatusMessage:
 		return s.processGetStatusMsg(msg.From)
+	case *GetBlockMessage:
+		fmt.Println("server received get block msg from ", msg.From, "data", t)
+		return s.processBlockRequestedMsg(msg.From, t)
 	}
 
 	return nil
@@ -168,8 +191,10 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 
 // when the server receives a req from another node to send its status msg
 func (s *Server) processGetStatusMsg(from NetAddr) error {
-	for _, tr := range s.Transporters {
-		//TODO: a way to fetch the verison of blockchain
+	if from == "TR_LATE" && (s.Transport.Addr() == "Remote_0" || s.Transport.Addr() == "Remote_1") {
+		fmt.Printf("received GetStatusMsg from TR_LATE by %v\n", s.Transport.Addr())
+	}
+	if s.Transport.Addr() != from {
 		statusMsg := NewStatusMessage(s.chain.Height(), s.chain.Version)
 		buf := &bytes.Buffer{}
 		if err := gob.NewEncoder(buf).Encode(statusMsg); err != nil {
@@ -180,20 +205,56 @@ func (s *Server) processGetStatusMsg(from NetAddr) error {
 		if err := gob.NewEncoder(buffer).Encode(msg); err != nil {
 			return err
 		}
-		if err := tr.SendMsg(from, buffer.Bytes()); err != nil {
+		if err := s.Transport.SendMsg(from, buffer.Bytes()); err != nil {
 			return err
 		}
+		if from == "TR_LATE" {
+			fmt.Printf("sent status msg to TR_LATE from %v\n", s.Transport.Addr())
+		}
 	}
+	// for _, tr := range s.Transporters {
+	// 	//TODO: a way to fetch the verison of blockchain
+	// 	continue
+	// }
 	return nil
 }
 
 // when the server receives a status msg response back from the nodes
 func (s *Server) processStatusMsg(from NetAddr, msg *StatusMessage) error {
 	//log it then
+	if s.Transport.Addr() == "TR_LATE" {
+		fmt.Println("TR_LATE received status msg from ", from, "data", msg)
+	}
 	fmt.Printf("received status msg %v from => server at address %v\n", msg, from)
 
 	// compare the msg data with the node's own bc; its height and version say
 	// cal the differences adn request the missing bits from the peer
+	if msg.CurrentHeight <= s.chain.Height() {
+		s.Logger.Log("msg", "peer is behind", "peer height", msg.CurrentHeight, "our height", s.chain.Height(), "peer address", from)
+	}
+
+	//now we are certain that we are behind peer; so we need to fetch the missing blocks
+	getBlockMsg := &GetBlockMessage{
+		From: s.chain.Height() + 1,
+		//0 would signal the remote node to send max no of blocks that they have
+		To: 0,
+	}
+	buf := &bytes.Buffer{}
+
+	if err := gob.NewEncoder(buf).Encode(getBlockMsg); err != nil {
+		return err
+	}
+
+	rpcMsg := NewMessage(MessageTypeGetBlocks, buf.Bytes())
+	return s.Transport.SendMsg(from, rpcMsg.Bytes())
+}
+
+func (s *Server) processBlockRequestedMsg(from NetAddr, msg *GetBlockMessage) error {
+	// sending all the blocks starting from 'msg.from'
+	if from == "TR_LATE" {
+		fmt.Println("TR_LATE sent a get block request")
+	}
+	fmt.Printf("server %v received get block request msg from %v\n", s.ID, from)
 
 	return nil
 }
@@ -277,6 +338,26 @@ func (s *Server) initTransporters() error {
 		}(tr)
 	}
 
+	return nil
+}
+
+func (s *Server) bootstrapNodes() error {
+	for _, tr := range s.Transporters {
+		if s.Transport.Addr() != tr.Addr() {
+			if err := s.Transport.Connect(tr); err != nil {
+				s.Logger.Log("err", "could not send msg to remote ", err)
+				return err
+			}
+			s.Logger.Log("msg", "connected to remote", "server sending is ", s.Transport.Addr(), "connected to ", tr.Addr())
+		}
+
+	}
+	//Send a GetStatusMsg to the connected nodes only once!
+	time.Sleep(3 * time.Second)
+	if err := s.sendGetStatusMsg(); err != nil {
+		s.Logger.Log("err", "could not send GetStatusMsg to remote nodes", err)
+		return err
+	}
 	return nil
 }
 

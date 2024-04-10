@@ -1,8 +1,11 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 )
+
+var ErrBlockKnown = errors.New("Block already known")
 
 type Validator interface {
 	ValidateBlock(*Block) error
@@ -20,7 +23,8 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 	// Validate block
 	// if the height of the proposed block is not less than the current height, return an error
 	if v.bc.HasBlock(b.Header.Height) {
-		return fmt.Errorf("Block with height %v and hash %v already exists", b.Header.Height, b.Hash(BlockHasher{}))
+		// return fmt.Errorf("Block with height %v and hash %v already exists", b.Header.Height, b.Hash(BlockHasher{}))
+		return ErrBlockKnown
 	}
 
 	///the height of the proposed block should be one greater than the current height

@@ -17,4 +17,3 @@ func (m *MemoryStore) Put(b *Block) error {
 	return nil
 }
 
-

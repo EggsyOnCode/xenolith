@@ -122,3 +122,11 @@ func (bc *Blockchain) HasBlock(height uint32) bool {
 func (bc *Blockchain) SetLogger(l log.Logger) {
 	bc.logger = l
 }
+
+// func (bc *Blockchain) GetBlock(height uint32) (*Block, error) {
+// 	if height > bc.Height() {
+// 		return nil, fmt.Errorf("Block with height %v is too high", height)
+// 	}
+
+// 	return bc.store.Get(height)
+// }

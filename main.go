@@ -13,22 +13,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func main() {
-	localT := network.NewLocalTransport("LOCAL")
-	remoteA := network.NewLocalTransport("Remote_0")
-	remoteB := network.NewLocalTransport("Remote_1")
-	remoteC := network.NewLocalTransport("Remote_2")
-	localT.Connect(remoteA)
-	remoteA.Connect(remoteB)
-	remoteA.Connect(remoteC)
-	remoteA.Connect(localT)
+var transports = []network.Transport{
+	network.NewLocalTransport("LOCAL"),
+	network.NewLocalTransport("Remote_0"),
+	network.NewLocalTransport("Remote_1"),
+	// network.NewLocalTransport("Remote_2"),
+}
 
-	initRemoteServers([]network.Transport{remoteA, remoteB, remoteC})
+func main() {
+
+	initRemoteServers(transports)
+	localNode := transports[0]
+	remoteNodeA := transports[1]
+	// remoteNodeC := transports[3]
 
 	go func() {
 		for {
 			//local transport sending to remote transport
-			if err := sendTx(remoteA, localT.Addr()); err != nil {
+			if err := sendTx(remoteNodeA, localNode.Addr()); err != nil {
 				logrus.Error(err)
 			}
 			time.Sleep(2 * time.Second)
@@ -36,24 +38,23 @@ func main() {
 	}()
 
 	go func() {
-		time.Sleep(7 * time.Second)
+		time.Sleep(4 * time.Second)
 		trLate := network.NewLocalTransport("TR_LATE")
+		trLate.Connect(remoteNodeA)
+		remoteNodeA.Connect(trLate)
 		trLateServer := makeServer(trLate, nil, "TR_LATE")
 		go trLateServer.Start()
 
-		// trlate needs some seed nodes
-		trLate.Connect(localT)
-		localT.Connect(trLate)
 	}()
 
 	//validator node
 	pk := crypto_lib.GeneratePrivateKey()
-	localServer := makeServer(localT, pk, "LOCAL")
+	localServer := makeServer(transports[0], pk, "LOCAL")
 	localServer.Start()
 }
 
 func initRemoteServers(tr []network.Transport) {
-	for i := 0; i < len(tr); i++ {
+	for i := 0; i < len(tr)-1; i++ {
 		id := fmt.Sprintf("REMOTE_%d", i)
 		server := makeServer(tr[i], nil, id)
 		go server.Start()
@@ -64,7 +65,7 @@ func makeServer(transport network.Transport, pk *crypto_lib.PrivateKey, id strin
 	serverOpts := network.ServerOpts{
 		Transport:    transport,
 		ID:           id,
-		Transporters: []network.Transport{transport},
+		Transporters: transports,
 		BlockTime:    5 * time.Second,
 		PrivateKey:   pk,
 	}

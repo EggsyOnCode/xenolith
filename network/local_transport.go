@@ -36,7 +36,10 @@ func (t *LocalTransport) Connect(tr Transport) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	//adding a diff local tranport as peer to our current trasnport
+	//TODO : we could make connection bidirectional?
 	t.peers[tr.Addr()] = tr.(*LocalTransport)
+	tr.AddPeer(t)
+	fmt.Printf("updated list of peers for %s: %v\n", t.addr, t.peers)
 	return nil
 }
 
@@ -60,7 +63,7 @@ func (t *LocalTransport) Broadcast(payload []byte, excludedPeer NetAddr) error {
 	for _, peer := range t.peers {
 		if peer.Addr() == excludedPeer {
 			continue
-	}
+		}
 		if err := t.SendMsg(peer.Addr(), payload); err != nil {
 			return err
 		}
@@ -77,4 +80,10 @@ func (t *LocalTransport) Peers() map[NetAddr]Transport {
 		peers[k] = v
 	}
 	return peers
+}
+
+func (t *LocalTransport) AddPeer(tr Transport) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.peers[tr.Addr()] = tr.(*LocalTransport)
 }

@@ -90,6 +90,16 @@ func DefaultRPCDecodeFunc(rpc RPC) (*DecodedMsg, error) {
 			From: rpc.From,
 			Data: tx,
 		}, nil
+	case MessageTypeGetBlocks:
+		fmt.Printf("received get blocks message from %v\n", rpc.From)
+		getBlockMsg := new(GetBlockMessage)
+		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(getBlockMsg); err != nil {
+			return nil, err
+		}
+		return &DecodedMsg{
+			From: rpc.From,
+			Data: getBlockMsg,
+		}, nil
 	case MessageTypeBlock:
 		block := new(core.Block)
 		if err := block.Decode(core.NewGobBlockDecoder(bytes.NewReader(msg.Data))); err != nil {

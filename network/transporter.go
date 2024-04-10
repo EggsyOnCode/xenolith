@@ -8,4 +8,5 @@ type Transport interface {
 	Consume() <-chan RPC
 	Addr() NetAddr
 	Peers() map[NetAddr]Transport
+	AddPeer(tr Transport) 
 }
