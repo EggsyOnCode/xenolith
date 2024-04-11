@@ -1,57 +1,62 @@
 package network
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net"
 )
 
-type TCPTransporter struct {
+type TCPTransport struct {
 	listenAddr NetAddr
 	listener   net.Listener
+	peerCh     chan *TCPPeer
 }
 
+// /TCP PEER
 type TCPPeer struct {
-	conn net.Conn
+	conn     net.Conn
+	Outgoing bool
 }
 
-func NewTCPPeer(conn net.Conn) *TCPPeer {
-	return &TCPPeer{conn: conn}
+func NewTCPPeer(conn net.Conn, outgoing bool) *TCPPeer {
+	return &TCPPeer{conn: conn, Outgoing: outgoing}
 }
 
-func NewTCPTransporter(addr string) *TCPTransporter {
-	return &TCPTransporter{
-		listenAddr: NetAddr(addr),
-	}
+func (p *TCPPeer) Send(b []byte) error {
+	_, err := p.conn.Write(b)
+	return err
 }
 
-func (t *TCPTransporter) acceptLoop() {
-	for {
-		conn, err := t.listener.Accept()
-		if err != nil {
-			fmt.Printf("error accepting connection: %v\n", err)
-			continue
-		}
-		fmt.Printf("accepted connection from %v\n", conn.RemoteAddr())
-
-		go t.readLoop(NewTCPPeer(conn))
-
-	}
-}
-
-func (t *TCPTransporter) readLoop(peer *TCPPeer) {
+func (p *TCPPeer) readLoop(rpcCh chan RPC) {
 	buf := make([]byte, 2048)
 	for {
-		n, err := peer.conn.Read(buf)
+		n, err := p.conn.Read(buf)
 		if err != nil {
-			fmt.Printf("error reading from connection: %v\n", err)
+			if err == io.EOF {
+				fmt.Printf("Connection closed with %v\n", p.conn.RemoteAddr())
+			} else {
+				fmt.Println("Error reading:", err)
+			}
 			return
 		}
 		msg := buf[:n]
-		fmt.Printf("msg: %v\n", string(msg))
+		rpcCh <- RPC{
+			From:    NetAddr(p.conn.RemoteAddr().String()),
+			Payload: bytes.NewReader(msg),
+		}
 	}
 }
 
-func (t *TCPTransporter) Start() error {
+// //
+func NewTCPTransporter(addr string, peerCh chan *TCPPeer) *TCPTransport {
+	return &TCPTransport{
+		listenAddr: NetAddr(addr),
+		peerCh:     peerCh,
+	}
+}
+
+func (t *TCPTransport) Start() error {
 	ln, err := net.Listen("tcp", string(t.listenAddr))
 	if err != nil {
 		return err
@@ -61,7 +66,19 @@ func (t *TCPTransporter) Start() error {
 
 	go t.acceptLoop()
 
-	fmt.Printf("TCP listening on port %v\n", t.listenAddr)
-
 	return nil
+}
+
+func (t *TCPTransport) acceptLoop() {
+	for {
+		conn, err := t.listener.Accept()
+		if err != nil {
+			fmt.Printf("error accepting connection: %v\n", err)
+			continue
+		}
+		fmt.Printf("accepted connection from %v\n", conn.RemoteAddr())
+		peer := NewTCPPeer(conn, false)
+		t.peerCh <- peer
+
+	}
 }

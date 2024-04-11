@@ -1,36 +1,69 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"log"
 	"net"
 	"time"
 
+	"github.com/EggsyOnCode/xenolith/core"
+	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/EggsyOnCode/xenolith/network"
 )
 
-var transports = []network.Transport{
-	network.NewLocalTransport("LOCAL"),
-	network.NewLocalTransport("Remote_0"),
-	network.NewLocalTransport("Remote_1"),
-	// network.NewLocalTransport("Remote_2"),
-}
+var BootStrapNodes = []string{":4000", ":5000"}
 
 func main() {
-	tr := network.NewTCPTransporter(":3000")
+	// tr := network.NewTCPTransporter(":3000")
 
-	go tr.Start()
+	// go tr.Start()
+	remoteNode0 := makeServer(nil, "Remote_0", ":4000", nil)
+	go remoteNode0.Start()
+
+	remoteNode1 := makeServer(nil, "Remote_1", ":5000", nil)
+	go remoteNode1.Start()
+
+	pk := crypto_lib.GeneratePrivateKey()
+	server := makeServer(pk, "LOCAL", ":3000", BootStrapNodes)
+	go server.Start()
 
 	time.Sleep(2 * time.Second)
-	TCPTester()
+	go TCPTester()
 	select {}
 }
 
+func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNodes []string) *network.Server {
+	serverOpts := network.ServerOpts{
+		ListenAddr:     listenAddr,
+		ID:             id,
+		PrivateKey:     pk,
+		BootStrapNodes: seedNodes,
+	}
+	server, err := network.NewServer(serverOpts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return server
+}
 func TCPTester() {
 	conn, err := net.Dial("tcp", ":3000")
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = conn.Write([]byte("Hello, world!"))
+	pk := crypto_lib.GeneratePrivateKey()
+	// data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
+	tx := core.NewTransaction(contract())
+	tx.Sign(pk)
+	tx.SetTimeStamp(time.Now().Unix())
+
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		fmt.Println(err)
+	}
+	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
+	_, err = conn.Write(msg.Bytes())
 	if err != nil {
 		panic(err)
 	}
@@ -77,21 +110,6 @@ func TCPTester() {
 // 	}
 // }
 
-// func makeServer(transport network.Transport, pk *crypto_lib.PrivateKey, id string) *network.Server {
-// 	serverOpts := network.ServerOpts{
-// 		Transport:    transport,
-// 		ID:           id,
-// 		Transporters: transports,
-// 		BlockTime:    5 * time.Second,
-// 		PrivateKey:   pk,
-// 	}
-// 	server, err := network.NewServer(serverOpts)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	return server
-// }
-
 // func sendTx(localT network.Transport, to network.NetAddr) error {
 // 	pk := crypto_lib.GeneratePrivateKey()
 // 	// data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
@@ -107,13 +125,13 @@ func TCPTester() {
 // 	return localT.SendMsg(to, msg.Bytes())
 // }
 
-// func contract() []byte {
-// 	dataKey := []byte{0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d}
-// 	data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
+func contract() []byte {
+	dataKey := []byte{0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d}
+	data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
 
-// 	data = append(data, dataKey...)
-// 	return data
-// }
+	data = append(data, dataKey...)
+	return data
+}
 
 // const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
