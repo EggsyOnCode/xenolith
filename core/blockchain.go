@@ -10,8 +10,11 @@ import (
 type Blockchain struct {
 	Version   uint32
 	logger    log.Logger
+
 	lock      sync.Mutex
 	headers   []*Header
+	blocks    []*Block
+
 	store     Storage
 	Validator Validator
 	//to store the state of all the smart contracts on the blockchain
@@ -63,14 +66,15 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 			return err
 		}
 		// fmt.Printf("STATE : %+v\n", vm.contractState)
-		result := vm.stack.Pop()
-		fmt.Printf("VM : %+v\n", result)
+		// result := vm.stack.Pop()
+		// fmt.Printf("VM : %+v\n", result)
 
 	}
 
 	//adding the block headers to blockchain headers list
 	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)
+	bc.blocks = append(bc.blocks, b)
 	bc.lock.Unlock()
 	//add block to the chain via Put method of store
 	bc.store.Put(b)
@@ -92,6 +96,17 @@ func (bc *Blockchain) Height() uint32 {
 	return uint32(len(bc.headers) - 1)
 }
 
+func (bc *Blockchain) GetBlock(height uint32) (*Block, error) {
+	if height > bc.Height() {
+		return nil, fmt.Errorf("Block with height %v is too high", height)
+	}
+
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+	//when adding the first block with height 1 , the height of the blockchain is 0 therefore we can't access bc.headers[1]
+	return bc.blocks[height], nil
+
+}
 func (bc *Blockchain) GetHeaders(height uint32) (*Header, error) {
 	if height > bc.Height() {
 		return nil, fmt.Errorf("Block with height %v is too high", height)

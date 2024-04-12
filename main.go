@@ -25,8 +25,16 @@ func main() {
 	go remoteNode1.Start()
 
 	pk := crypto_lib.GeneratePrivateKey()
-	server := makeServer(pk, "LOCAL", ":3000", BootStrapNodes)
-	go server.Start()
+
+	localNode := makeServer(pk, "LOCAL", ":3000", BootStrapNodes)
+	go localNode.Start()
+
+	go func() {
+		time.Sleep(16 * time.Second)
+
+		lateNode := makeServer(nil, "LATE", ":6000", []string{":4000"})
+		go lateNode.Start()
+	}()
 
 	time.Sleep(2 * time.Second)
 	go TCPTester()
@@ -40,11 +48,11 @@ func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNod
 		PrivateKey:     pk,
 		BootStrapNodes: seedNodes,
 	}
-	server, err := network.NewServer(serverOpts)
+	localNode, err := network.NewServer(serverOpts)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return server
+	return localNode
 }
 func TCPTester() {
 	conn, err := net.Dial("tcp", ":3000")
@@ -105,8 +113,8 @@ func TCPTester() {
 // func initRemoteServers(tr []network.Transport) {
 // 	for i := 0; i < len(tr)-1; i++ {
 // 		id := fmt.Sprintf("REMOTE_%d", i)
-// 		server := makeServer(tr[i], nil, id)
-// 		go server.Start()
+// 		localNode := makeServer(tr[i], nil, id)
+// 		go localNode.Start()
 // 	}
 // }
 

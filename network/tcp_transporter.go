@@ -76,7 +76,6 @@ func (t *TCPTransport) acceptLoop() {
 			fmt.Printf("error accepting connection: %v\n", err)
 			continue
 		}
-		fmt.Printf("accepted connection from %v\n", conn.RemoteAddr())
 		peer := NewTCPPeer(conn, false)
 		t.peerCh <- peer
 
