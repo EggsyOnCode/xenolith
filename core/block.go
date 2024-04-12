@@ -39,7 +39,7 @@ type Block struct {
 	Header       *Header
 	Transactions []*Transaction
 	//these two fields are for the validator/miner that would be proposing hte block to the network
-	Validator *crypto_lib.PublicKey
+	Validator crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
 	//cached hash of the block (so that if someone reqs it we don;t have to hash it agin n again)
 	hash core_types.Hash

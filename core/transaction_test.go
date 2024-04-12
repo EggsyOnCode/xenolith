@@ -16,7 +16,7 @@ func TestSignTX(t *testing.T) {
 	err := tx.Sign(priv)
 	assert.Nil(t, err)
 	assert.NotNil(t, tx.Signature)
-	assert.Equal(t, tx.From, priv.PublicKey())
+	assert.Equal(t, tx.From, crypto_lib.PublicKey(crypto_lib.PublicKey(priv.PublicKey())))
 }
 func TestTxVerification(t *testing.T) {
 	tx := &Transaction{
@@ -26,7 +26,7 @@ func TestTxVerification(t *testing.T) {
 	err := tx.Sign(priv)
 	assert.Nil(t, err)
 	assert.NotNil(t, tx.Signature)
-	assert.Equal(t, tx.From, priv.PublicKey())
+	assert.Equal(t, tx.From, crypto_lib.PublicKey(priv.PublicKey()))
 	verfication, _ := tx.Verify()
 	assert.True(t, verfication)
 

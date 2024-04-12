@@ -208,6 +208,8 @@ func (s *Server) ProcessMessage(msg *DecodedMsg) error {
 		return s.processGetStatusMsg(msg.From)
 	case *GetBlockMessage:
 		return s.processBlockRequestedMsg(msg.From, t)
+	case *BlocksMessage:
+		return s.processBlockReceipt(msg.From, t)
 	}
 
 	return nil
@@ -312,7 +314,7 @@ func (s *Server) processBlockRequestedMsg(from NetAddr, msg *GetBlockMessage) er
 		}
 	}
 
-	//if the remote node is aksing for a specific no of blocks then
+	//if the remote node is asking for a specific no of blocks then
 	for i := msg.From; i < s.chain.Height(); i++ {
 		block, err := s.chain.GetBlock(uint32(i))
 		if err != nil {
@@ -324,6 +326,41 @@ func (s *Server) processBlockRequestedMsg(from NetAddr, msg *GetBlockMessage) er
 
 	fmt.Printf("sending %v blocks to %v\n", (blocks), from)
 
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	gob.Register(&BlocksMessage{})
+
+	blocksMsg := &BlocksMessage{
+		Blocks: blocks,
+	}
+	buf := &bytes.Buffer{}
+
+	if err := gob.NewEncoder(buf).Encode(blocksMsg); err != nil {
+		return err
+	}
+
+	rpcMsg := NewMessage(MessageTypeBlocks, buf.Bytes())
+
+	peer, ok := s.peerMap[from]
+	if !ok {
+		return fmt.Errorf("peer %s not found", peer.conn.RemoteAddr())
+	}
+
+	return peer.Send(rpcMsg.Bytes())
+}
+
+// func to process the blocks received from the remote nodes
+func (s *Server) processBlockReceipt(from NetAddr, msg *BlocksMessage) error {
+	if s.ID == "LATE" {
+		fmt.Printf("server %v received blocks from %v\n", s.ID, from)
+	}
+	for _, block := range msg.Blocks {
+		fmt.Println("processing block")
+		if err := s.processBlock(block, from); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

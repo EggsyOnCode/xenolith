@@ -9,7 +9,7 @@ import (
 
 type Transaction struct {
 	Data      []byte
-	From      *crypto_lib.PublicKey
+	From      crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
 	timeStamp int64
 

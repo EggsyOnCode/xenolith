@@ -62,7 +62,7 @@ func TestSignAndVerifyBlock(t *testing.T) {
 	priv := crypto_lib.GeneratePrivateKey()
 	err := block.Sign(priv)
 	assert.Nil(t, err)
-	assert.Equal(t, block.Validator, priv.PublicKey())
+	assert.Equal(t, block.Validator, crypto_lib.PublicKey(priv.PublicKey()))
 	fmt.Println(block.Signature)
 
 	err = block.Verify()
@@ -88,7 +88,7 @@ func TestCodecBlock(t *testing.T) {
 // 	ver, _ := block.Verify()
 // 	assert.True(t, ver)
 // 	assert.Nil(t, err)
-// 	assert.Equal(t, block.Validator, priv.PublicKey())
+// 	assert.Equal(t, block.Validator, crypto_lib.PublicKey(priv.PublicKey()))
 // 	fmt.Println(block.Signature)
 
 // 	//header info changing;

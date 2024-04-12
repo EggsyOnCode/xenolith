@@ -36,20 +36,15 @@ func (p *PrivateKey) Sign(data []byte) (*Signature, error) {
 	return &Signature{R: r, S: s}, nil
 }
 
-func (p *PrivateKey) PublicKey() *PublicKey {
-	return &PublicKey{Key: &p.key.PublicKey}
+func (p *PrivateKey) PublicKey() []byte {
+	return elliptic.MarshalCompressed(elliptic.P256(), p.key.X, p.key.Y)
 }
 
-type PublicKey struct {
-	Key *ecdsa.PublicKey
-}
-
-func (p *PublicKey) ToSlice() []byte {
-	return elliptic.MarshalCompressed(elliptic.P256(), p.Key.X, p.Key.Y)
-}
+// slice of bytes which would be sent over the network
+type PublicKey []byte
 
 func (p *PublicKey) Address() core_types.Address {
-	hash := sha256.Sum256(p.ToSlice())
+	hash := sha256.Sum256(*p)
 
 	//the last 20 bytes are the address
 	return core_types.AddressFromBytes(hash[len(hash)-20:])
@@ -60,6 +55,12 @@ type Signature struct {
 }
 
 // msg can be verified with the public key
-func (sig *Signature) Verify(data []byte, p *PublicKey) bool {
-	return ecdsa.Verify(p.Key, data, sig.R, sig.S)
+func (sig *Signature) Verify(data []byte, p []byte) bool {
+	x, y := elliptic.UnmarshalCompressed(elliptic.P256(), p)
+	pk := &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     x,
+		Y:     y,
+	}
+	return ecdsa.Verify(pk, data, sig.R, sig.S)
 }
