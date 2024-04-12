@@ -58,6 +58,20 @@ func TestGetHeaders(t *testing.T) {
 
 }
 
+func TestGetBlock(t *testing.T) {
+	bc := newBlockchainWithGenesis(t)
+	lenB := 10
+	for i := 0; i < lenB; i++ {
+		prevHash := getPrevBlockHash(t, bc, uint32(i+1))
+		block := randomBlockWithSignature(t, uint32(i+1), (prevHash))
+		err := bc.AddBlock(block)
+		assert.Nil(t, err)
+		block1, err1 := bc.GetBlock(block.Header.Height)
+		assert.Nil(t, err1)
+		assert.Equal(t, block, block1)
+	}
+}
+
 func newBlockchainWithGenesis(t *testing.T) *Blockchain {
 	block := randomBlockWithSignature(t, 1, core_types.Hash{})
 	logger := log.NewLogfmtLogger(os.Stderr)

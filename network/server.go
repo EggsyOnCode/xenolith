@@ -266,28 +266,47 @@ func (s *Server) processStatusMsg(from NetAddr, msg *StatusMessage) error {
 	}
 
 	//now we are certain that we are behind peer; so we need to fetch the missing blocks
-	getBlockMsg := &GetBlockMessage{
-		From: s.chain.Height() + 1,
-		//0 would signal the remote node to send max no of blocks that they have
-		To: 0,
+	go s.reqBlockLoop(from)
+	return nil
+}
+
+// loop to keep requesting a peer for blocks until we are in sync
+// TODO: find a conditoin to detect that we indeed are synced and terminate the loop
+// cuz this way we will be congesting the network!!!
+func (s *Server) reqBlockLoop(peer NetAddr) error {
+	ticker := time.NewTicker(3 * time.Second)
+	for {
+		ourHeight := s.chain.Height()
+		s.Logger.Log("msg", "requesting blocks from peer", "peer", peer, "requesting height", ourHeight+1)
+
+		getBlockMsg := &GetBlockMessage{
+			From: s.chain.Height() + 1,
+			//0 would signal the remote node to send max no of blocks that they have
+			To: 0,
+		}
+		buf := &bytes.Buffer{}
+
+		if err := gob.NewEncoder(buf).Encode(getBlockMsg); err != nil {
+			return err
+		}
+
+		rpcMsg := NewMessage(MessageTypeGetBlocks, buf.Bytes())
+
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		//to whom we have to send our data
+		peer, ok := s.peerMap[peer]
+		if !ok {
+			return fmt.Errorf("peer %s not found", peer.conn.RemoteAddr())
+		}
+		if err := peer.Send(rpcMsg.Bytes()); err != nil {
+			s.Logger.Log("msg", "failed to send get block msg", "err", err)
+		}
+
+		<-ticker.C
+
 	}
-	buf := &bytes.Buffer{}
-
-	if err := gob.NewEncoder(buf).Encode(getBlockMsg); err != nil {
-		return err
-	}
-
-	rpcMsg := NewMessage(MessageTypeGetBlocks, buf.Bytes())
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	//to whom we have to send our data
-	peer, ok := s.peerMap[from]
-	if !ok {
-		return fmt.Errorf("peer %s not found", peer.conn.RemoteAddr())
-	}
-	return peer.Send(rpcMsg.Bytes())
 }
 
 // when some other nodes requests us for our blocks
@@ -304,7 +323,7 @@ func (s *Server) processBlockRequestedMsg(from NetAddr, msg *GetBlockMessage) er
 
 	//if the remote node is asking for all the blocks
 	if msg.To == 0 {
-		for i := 0; i < int(s.chain.Height()); i++ {
+		for i := int(msg.From); i <= int(s.chain.Height()); i++ {
 			block, err := s.chain.GetBlock(uint32(i))
 			if err != nil {
 				return err
@@ -315,7 +334,7 @@ func (s *Server) processBlockRequestedMsg(from NetAddr, msg *GetBlockMessage) er
 	}
 
 	//if the remote node is asking for a specific no of blocks then
-	for i := msg.From; i < s.chain.Height(); i++ {
+	for i := msg.From; i <= s.chain.Height(); i++ {
 		block, err := s.chain.GetBlock(uint32(i))
 		if err != nil {
 			return err
@@ -449,5 +468,9 @@ func genesisBlock() *core.Block {
 		Timestamp: 000000,
 	}
 
-	return core.NewBlock(headers, nil)
+	block := core.NewBlock(headers, nil)
+	privK := crypto_lib.GeneratePrivateKey()
+	block.Sign(privK)
+
+	return block
 }

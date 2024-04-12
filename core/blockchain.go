@@ -8,12 +8,12 @@ import (
 )
 
 type Blockchain struct {
-	Version   uint32
-	logger    log.Logger
+	Version uint32
+	logger  log.Logger
 
-	lock      sync.Mutex
-	headers   []*Header
-	blocks    []*Block
+	lock    sync.Mutex
+	headers []*Header
+	blocks  []*Block
 
 	store     Storage
 	Validator Validator
@@ -30,11 +30,13 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		store:         NewMemoryStore(),
 		logger:        logger,
 		Version:       1,
+		blocks:        make([]*Block, 1),
 	}
 
 	bc.Validator = NewBlockValidator(bc)
 
 	err := bc.addBlockWithoutValidation(genesis)
+	// err := bc.AddBlock(genesis)
 	if err != nil {
 		return bc, err
 	}
@@ -137,11 +139,3 @@ func (bc *Blockchain) HasBlock(height uint32) bool {
 func (bc *Blockchain) SetLogger(l log.Logger) {
 	bc.logger = l
 }
-
-// func (bc *Blockchain) GetBlock(height uint32) (*Block, error) {
-// 	if height > bc.Height() {
-// 		return nil, fmt.Errorf("Block with height %v is too high", height)
-// 	}
-
-// 	return bc.store.Get(height)
-// }

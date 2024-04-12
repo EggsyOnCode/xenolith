@@ -81,6 +81,8 @@ func TestCodecBlock(t *testing.T) {
 
 }
 
+
+
 // func TestVerifyFail(t *testing.T){
 // 	block := randomBlock(1)
 // 	priv := crypto_lib.GeneratePrivateKey()
