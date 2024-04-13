@@ -18,21 +18,21 @@ func main() {
 	// tr := network.NewTCPTransporter(":3000")
 
 	// go tr.Start()
-	remoteNode0 := makeServer(nil, "Remote_0", ":4000", nil)
+	remoteNode0 := makeServer(nil, "Remote_0", ":4000", nil, "")
 	go remoteNode0.Start()
 
-	remoteNode1 := makeServer(nil, "Remote_1", ":5000", nil)
+	remoteNode1 := makeServer(nil, "Remote_1", ":5000", nil, "")
 	go remoteNode1.Start()
 
 	pk := crypto_lib.GeneratePrivateKey()
 
-	localNode := makeServer(pk, "LOCAL", ":3000", BootStrapNodes)
+	localNode := makeServer(pk, "LOCAL", ":3000", BootStrapNodes, ":9999")
 	go localNode.Start()
 
 	go func() {
 		time.Sleep(11 * time.Second)
 
-		lateNode := makeServer(nil, "LATE", ":6000", []string{":4000"})
+		lateNode := makeServer(nil, "LATE", ":6000", []string{":4000"}, "")
 		go lateNode.Start()
 	}()
 
@@ -41,12 +41,13 @@ func main() {
 	select {}
 }
 
-func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNodes []string) *network.Server {
+func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNodes []string, apiListenAddr string) *network.Server {
 	serverOpts := network.ServerOpts{
 		ListenAddr:     listenAddr,
 		ID:             id,
 		PrivateKey:     pk,
 		BootStrapNodes: seedNodes,
+		APIListenAddr:  apiListenAddr,
 	}
 	localNode, err := network.NewServer(serverOpts)
 	if err != nil {

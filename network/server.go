@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/EggsyOnCode/xenolith/api"
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
@@ -19,6 +20,7 @@ import (
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
+	APIListenAddr  string
 	BootStrapNodes []string
 	ListenAddr     string
 	ID             string
@@ -65,6 +67,19 @@ func NewServer(opts ServerOpts) (*Server, error) {
 
 	peerCh := make(chan *TCPPeer)
 	tr := NewTCPTransporter(opts.ListenAddr, peerCh)
+
+	//only if the api listen addr port has been specified
+	if len(opts.APIListenAddr) > 0 {
+		cfg := api.ServerConfig{
+			ListenAddr: opts.APIListenAddr,
+			Logger:     opts.Logger,
+		}
+		apiServer := api.NewAPIServer(cfg, newChain)
+
+		go apiServer.Start()
+
+		opts.Logger.Log("msg", "API server started at port", "port", opts.APIListenAddr)
+	}
 
 	s := &Server{
 		ServerOpts:   opts,
