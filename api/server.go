@@ -17,8 +17,15 @@ type Block struct {
 	PrevBlockHash string
 	Height        uint32
 	Timestamp     string
+	Validator     string
+	Signature     string
 }
 
+///////////////////
+
+type APIError struct {
+	Error string
+}
 type ServerConfig struct {
 	ListenAddr string
 	Logger     log.Logger
@@ -50,16 +57,18 @@ func (s *Server) handleGetBlock(c echo.Context) error {
 	if err == nil {
 		block, err := s.bc.GetBlock(uint32(height))
 		if err != nil {
-			return c.JSON(http.StatusNotFound, err)
+			return c.JSON(http.StatusNotFound, APIError{Error: err.Error()})
 		}
 
-		//covnerting block to user friendly format jsonBlock
+		//converting block to user friendly format jsonBlock
 		jsonBlock := &Block{
 			Version:       block.Header.Version,
 			DataHash:      block.Header.DataHash.String(),
 			PrevBlockHash: block.Header.PrevBlockHash.String(),
 			Height:        block.Header.Height,
 			Timestamp:     time.Unix(int64(block.Header.Timestamp), 0).String(),
+			Validator:     block.Validator.Address().String(),
+			Signature:     block.Signature.String(),
 		}
 		return c.JSON(http.StatusOK, jsonBlock)
 	}

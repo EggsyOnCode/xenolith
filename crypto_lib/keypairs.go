@@ -54,6 +54,10 @@ type Signature struct {
 	R, S *big.Int
 }
 
+func (sig *Signature) String() string{
+	return sig.R.String() + sig.S.String()
+}
+
 // msg can be verified with the public key
 func (sig *Signature) Verify(data []byte, p []byte) bool {
 	x, y := elliptic.UnmarshalCompressed(elliptic.P256(), p)
