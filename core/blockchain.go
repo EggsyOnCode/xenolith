@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/go-kit/log"
 )
 
@@ -11,9 +12,10 @@ type Blockchain struct {
 	Version uint32
 	logger  log.Logger
 
-	lock    sync.Mutex
-	headers []*Header
-	blocks  []*Block
+	lock       sync.Mutex
+	headers    []*Header
+	blocks     []*Block
+	blockStore map[core_types.Hash]*Block
 
 	store     Storage
 	Validator Validator
@@ -31,6 +33,7 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		logger:        logger,
 		Version:       1,
 		blocks:        make([]*Block, 1),
+		blockStore:    make(map[core_types.Hash]*Block),
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -67,6 +70,18 @@ func (bc *Blockchain) Height() uint32 {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
 	return uint32(len(bc.headers) - 1)
+}
+
+func (bc *Blockchain) GetBlockByHash(hash core_types.Hash) (*Block, error) {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+
+	block, ok := bc.blockStore[hash]
+	if !ok {
+		return nil, fmt.Errorf("block with hash (%s) not found", hash)
+	}
+
+	return block, nil
 }
 
 func (bc *Blockchain) GetBlock(height uint32) (*Block, error) {
@@ -114,6 +129,8 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)
 	bc.blocks = append(bc.blocks, b)
+	//adding block to the blockStore
+	bc.blockStore[b.Hash(BlockHasher{})] = b
 	bc.lock.Unlock()
 
 	bc.store.Put(b)
