@@ -13,6 +13,10 @@ import (
 )
 
 // ///helper types for user friendly transforamtions
+type TxResponse struct {
+	TxCount  uint32
+	TxHashes []string
+}
 type Block struct {
 	Hash          string
 	Version       uint32
@@ -22,6 +26,15 @@ type Block struct {
 	Timestamp     string
 	Validator     string
 	Signature     string
+	*TxResponse
+}
+
+type Transaction struct {
+	Data      []byte
+	From      string
+	Signature string
+	TimeStamp string
+	Hash      string
 }
 
 ///////////////////
@@ -49,6 +62,7 @@ func NewAPIServer(cfg ServerConfig, bc *core.Blockchain) *Server {
 func (s *Server) Start() error {
 	echo := echo.New()
 	echo.GET("/blocks/:hashID", s.handleGetBlock)
+	echo.GET("/tx/:txHash", s.handleGetTx)
 
 	return echo.Start(s.ListenAddr)
 }
@@ -80,7 +94,33 @@ func (s *Server) handleGetBlock(c echo.Context) error {
 	return c.JSON(http.StatusOK, intoJsonBlock(block))
 }
 
+func (s *Server) handleGetTx(c echo.Context) error {
+	txHash := c.Param("txHash")
+
+	h, err := hex.DecodeString(txHash)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, APIError{Error: err.Error()})
+	}
+
+	tx, err := s.bc.GetTxByHash(core_types.HashFromBytes(h))
+	if err != nil {
+		return c.JSON(http.StatusNotFound, APIError{Error: err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, intoJsonTx(tx))
+}
+
+// /utils
 func intoJsonBlock(block *core.Block) *Block {
+	txResponse := &TxResponse{
+		TxCount:  uint32(len(block.Transactions)),
+		TxHashes: make([]string, 0, len(block.Transactions)),
+	}
+
+	for i := 0; i < len(block.Transactions); i++ {
+		txResponse.TxHashes = append(txResponse.TxHashes, block.Transactions[i].Hash(core.TxHasher{}).String())
+	}
+
 	return &Block{
 		Hash:          block.Hash(core.BlockHasher{}).String(),
 		Version:       block.Header.Version,
@@ -90,6 +130,18 @@ func intoJsonBlock(block *core.Block) *Block {
 		Timestamp:     time.Unix(int64(block.Header.Timestamp), 0).String(),
 		Validator:     block.Validator.Address().String(),
 		Signature:     block.Signature.String(),
+		TxResponse:    txResponse,
 	}
 
+}
+
+func intoJsonTx(tx *core.Transaction) *Transaction {
+	return &Transaction{
+		//TODO: find a more graceful way to showcase data byte slice
+		Data:      (tx.Data),
+		From:      tx.From.Address().String(),
+		Signature: tx.Signature.String(),
+		Hash:      tx.Hash(core.TxHasher{}).String(),
+		TimeStamp: time.Unix((tx.TimeStamp()), 0).String(),
+	}
 }

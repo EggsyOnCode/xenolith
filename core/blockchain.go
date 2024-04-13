@@ -16,6 +16,8 @@ type Blockchain struct {
 	headers    []*Header
 	blocks     []*Block
 	blockStore map[core_types.Hash]*Block
+	//TODO: add a diff mutex to make txSTore thread safe; currenlty both teh stores are usint he same mutex; which is bad!
+	txStore    map[core_types.Hash]*Transaction
 
 	store     Storage
 	Validator Validator
@@ -34,6 +36,7 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		Version:       1,
 		blocks:        make([]*Block, 1),
 		blockStore:    make(map[core_types.Hash]*Block),
+		txStore:       make(map[core_types.Hash]*Transaction),
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -107,12 +110,26 @@ func (bc *Blockchain) GetHeaders(height uint32) (*Header, error) {
 
 }
 
+func (bc *Blockchain) GetTxByHash(hash core_types.Hash) (*Transaction, error) {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+
+	tx, ok := bc.txStore[hash]
+	if !ok {
+		return nil, fmt.Errorf("transaction with hash (%s) not found", hash)
+	}
+
+	return tx, nil
+
+}
+
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	bc.lock.Lock()
 
 	//run the block data i.e the code on the VM
 	for _, tx := range b.Transactions {
 		bc.logger.Log("msg", "executing code", "tx", tx.Hash(&TxHasher{}), "len of the data", len(tx.Data))
+		bc.txStore[tx.Hash(&TxHasher{})] = tx
 
 		vm := NewVM(tx.Data, bc.contractState)
 
