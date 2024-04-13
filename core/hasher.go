@@ -2,6 +2,7 @@ package core
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
 )
@@ -22,11 +23,14 @@ func (BlockHasher) Hash(header *Header) core_types.Hash {
 	return core_types.Hash(h)
 }
 
-
 type TxHasher struct{}
 
-//TxHashser for sha256 implementatin has been used
+// TxHashser for sha256 implementatin has been used
 func (TxHasher) Hash(tx *Transaction) core_types.Hash {
-	h := sha256.Sum256(tx.Data)
+	//int64 is 8 bytes long
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(tx.Nonce))
+	data := append(buf, tx.Data...)
+	h := sha256.Sum256(data)
 	return core_types.Hash(h)
 }

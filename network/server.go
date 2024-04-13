@@ -151,7 +151,7 @@ free:
 
 		case tx := <-s.txCh:
 			err := s.processTx(tx)
-			if err != nil {
+			if err !=nil{
 				s.Logger.Log("err", err)
 				continue
 			}

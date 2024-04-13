@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"time"
 
@@ -38,7 +37,14 @@ func main() {
 	}()
 
 	time.Sleep(2 * time.Second)
-	go TCPTester()
+
+	ticker := time.NewTicker(1 * time.Second)
+	go func() {
+		for {
+			go TCPTester()
+			<-ticker.C
+		}
+	}()
 	select {}
 }
 
@@ -57,14 +63,11 @@ func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNod
 	return localNode
 }
 func TCPTester() {
-	_, err := net.Dial("tcp", ":3000")
-	if err != nil {
-		panic(err)
-	}
 
 	pk := crypto_lib.GeneratePrivateKey()
 	// data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
 	tx := core.NewTransaction(contract())
+	fmt.Printf("====> tx hash %x\n", tx.Hash(core.TxHasher{}))
 	tx.Sign(pk)
 	tx.SetTimeStamp(time.Now().Unix())
 
@@ -81,7 +84,7 @@ func TCPTester() {
 
 	//making http req to our json rpc server ; sending tx over the wire
 
-	err = sendViaHTTP(buf.Bytes())
+	err := sendViaHTTP(buf.Bytes())
 	if err != nil {
 		fmt.Println(err)
 	}

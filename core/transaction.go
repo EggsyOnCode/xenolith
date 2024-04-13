@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
@@ -12,6 +13,7 @@ type Transaction struct {
 	From      crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
 	timeStamp int64
+	Nonce     int64
 
 	//caches the hash of the tx
 	hash core_types.Hash
@@ -19,7 +21,8 @@ type Transaction struct {
 
 func NewTransaction(data []byte) *Transaction {
 	return &Transaction{
-		Data: data,
+		Data:  data,
+		Nonce: rand.Int63n(1000000),
 	}
 }
 
@@ -60,7 +63,6 @@ func (t *Transaction) SetTimeStamp(timeStamp int64) {
 func (t *Transaction) TimeStamp() int64 {
 	return t.timeStamp
 }
-
 
 func (t *Transaction) Encode(enc Encoder[*Transaction]) error {
 	return enc.Encode(t)

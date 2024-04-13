@@ -35,6 +35,7 @@ type Transaction struct {
 	Signature string
 	TimeStamp string
 	Hash      string
+	Nonce     int64
 }
 
 ///////////////////
@@ -157,5 +158,6 @@ func intoJsonTx(tx *core.Transaction) *Transaction {
 		Signature: tx.Signature.String(),
 		Hash:      tx.Hash(core.TxHasher{}).String(),
 		TimeStamp: time.Unix((tx.TimeStamp()), 0).String(),
+		Nonce:     tx.Nonce,
 	}
 }
