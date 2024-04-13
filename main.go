@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/EggsyOnCode/xenolith/core"
@@ -56,7 +57,7 @@ func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNod
 	return localNode
 }
 func TCPTester() {
-	conn, err := net.Dial("tcp", ":3000")
+	_, err := net.Dial("tcp", ":3000")
 	if err != nil {
 		panic(err)
 	}
@@ -71,11 +72,34 @@ func TCPTester() {
 	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
 		fmt.Println(err)
 	}
-	msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
-	_, err = conn.Write(msg.Bytes())
+	// msg := network.NewMessage(network.MessageTypeTx, buf.Bytes())
+
+	// _, err = conn.Write(msg.Bytes())
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	//making http req to our json rpc server ; sending tx over the wire
+
+	err = sendViaHTTP(buf.Bytes())
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
+}
+
+func sendViaHTTP(b []byte) error {
+	req, err := http.NewRequest("POST", "http://localhost:9999/tx", bytes.NewBuffer(b))
+	if err != nil {
+		return err
+	}
+
+	clent := http.Client{}
+	_, err1 := clent.Do(req)
+	if err1 != nil {
+		return err1
+	}
+
+	return nil
 }
 
 // func main() {

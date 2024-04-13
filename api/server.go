@@ -49,13 +49,15 @@ type ServerConfig struct {
 
 type Server struct {
 	ServerConfig
-	bc *core.Blockchain
+	bc     *core.Blockchain
+	txChan chan *core.Transaction
 }
 
-func NewAPIServer(cfg ServerConfig, bc *core.Blockchain) *Server {
+func NewAPIServer(cfg ServerConfig, bc *core.Blockchain, ch chan *core.Transaction) *Server {
 	return &Server{
 		ServerConfig: cfg,
 		bc:           bc,
+		txChan:       ch,
 	}
 }
 
@@ -63,6 +65,7 @@ func (s *Server) Start() error {
 	echo := echo.New()
 	echo.GET("/blocks/:hashID", s.handleGetBlock)
 	echo.GET("/tx/:txHash", s.handleGetTx)
+	echo.POST("/tx", s.handlePostTx)
 
 	return echo.Start(s.ListenAddr)
 }
@@ -110,7 +113,18 @@ func (s *Server) handleGetTx(c echo.Context) error {
 	return c.JSON(http.StatusOK, intoJsonTx(tx))
 }
 
-// /utils
+func (s *Server) handlePostTx(c echo.Context) error {
+	tx := new(core.Transaction)
+	if err := tx.Decode(core.NewGobTxDecoder(c.Request().Body)); err != nil {
+		return c.JSON(http.StatusNotFound, APIError{Error: err.Error()})
+	}
+
+	s.txChan <- tx
+
+	return nil
+}
+
+// //utils
 func intoJsonBlock(block *core.Block) *Block {
 	txResponse := &TxResponse{
 		TxCount:  uint32(len(block.Transactions)),
@@ -137,7 +151,7 @@ func intoJsonBlock(block *core.Block) *Block {
 
 func intoJsonTx(tx *core.Transaction) *Transaction {
 	return &Transaction{
-		//TODO: find a more graceful way to showcase data byte slice
+		//TODO: find a more graceful way to send out data byte slice
 		Data:      (tx.Data),
 		From:      tx.From.Address().String(),
 		Signature: tx.Signature.String(),

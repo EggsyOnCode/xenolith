@@ -46,6 +46,8 @@ type Server struct {
 	rpcCh        chan RPC
 	memPool      *TxPool
 	quitCh       chan struct{}
+	// we;ll be using this chan to receive tx from the json rpc server
+	txCh chan *core.Transaction
 }
 
 func NewServer(opts ServerOpts) (*Server, error) {
@@ -68,19 +70,6 @@ func NewServer(opts ServerOpts) (*Server, error) {
 	peerCh := make(chan *TCPPeer)
 	tr := NewTCPTransporter(opts.ListenAddr, peerCh)
 
-	//only if the api listen addr port has been specified
-	if len(opts.APIListenAddr) > 0 {
-		cfg := api.ServerConfig{
-			ListenAddr: opts.APIListenAddr,
-			Logger:     opts.Logger,
-		}
-		apiServer := api.NewAPIServer(cfg, newChain)
-
-		go apiServer.Start()
-
-		opts.Logger.Log("msg", "API server started at port", "port", opts.APIListenAddr)
-	}
-
 	s := &Server{
 		ServerOpts:   opts,
 		TCPTransport: tr,
@@ -92,6 +81,20 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		isValidator:  opts.PrivateKey != nil,
 		quitCh:       make(chan struct{}),
 		memPool:      NewTxPool(1000),
+		txCh:         make(chan *core.Transaction),
+	}
+
+	// only if the api listen addr port has been specified
+	if len(opts.APIListenAddr) > 0 {
+		cfg := api.ServerConfig{
+			ListenAddr: opts.APIListenAddr,
+			Logger:     opts.Logger,
+		}
+		apiServer := api.NewAPIServer(cfg, newChain, s.txCh)
+
+		go apiServer.Start()
+
+		opts.Logger.Log("msg", "API server started at port", "port", opts.APIListenAddr)
 	}
 
 	// if the rpc processor has not been defined; then we can assume that the server itself is the processor
@@ -145,6 +148,14 @@ free:
 					s.Logger.Log("err", err)
 				}
 			}
+
+		case tx := <-s.txCh:
+			err := s.processTx(tx)
+			if err != nil {
+				s.Logger.Log("err", err)
+				continue
+			}
+
 		case <-s.quitCh:
 			break free
 		}
