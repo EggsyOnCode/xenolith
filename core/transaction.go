@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/gob"
 	"fmt"
 	"math/rand"
 
@@ -8,7 +9,31 @@ import (
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 )
 
+type TxType byte
+
+const (
+	TxTypeCollection TxType = iota // 0x0
+	TxTypeNFT
+)
+
+type CollectionTx struct {
+	Fee      uint64
+	MetaData []byte
+	Quantity uint16
+}
+
+type MintTx struct {
+	Fee             uint64
+	MetaData        []byte
+	CollectionOwner crypto_lib.PublicKey
+	Signature       crypto_lib.Signature
+	Collection      core_types.Hash
+	NFT             core_types.Hash
+}
+
 type Transaction struct {
+	TxType    TxType
+	TxInner   any
 	Data      []byte
 	From      crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
@@ -50,7 +75,6 @@ func (t *Transaction) Verify() (bool, error) {
 	if (t.Signature == nil) || (t.From == nil) {
 		return false, fmt.Errorf("Transaction not signed")
 	}
-	// return t.Signature.Verify(t.Data, t.From), fmt.Errorf("invalid signature")
 	return t.Signature.Verify(t.Data, t.From), nil
 }
 
@@ -69,4 +93,9 @@ func (t *Transaction) Encode(enc Encoder[*Transaction]) error {
 }
 func (t *Transaction) Decode(dec Decoder[*Transaction]) error {
 	return dec.Decode(t)
+}
+
+func init() {
+	gob.Register(&CollectionTx{})
+	gob.Register(&MintTx{})
 }

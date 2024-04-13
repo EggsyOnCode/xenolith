@@ -401,7 +401,6 @@ func (s *Server) processBlockReceipt(from NetAddr, msg *BlocksMessage) error {
 		fmt.Printf("server %v received blocks from %v\n", s.ID, from)
 	}
 	for _, block := range msg.Blocks {
-		fmt.Println("processing block")
 		if err := s.processBlock(block, from); err != nil {
 			return err
 		}
@@ -447,7 +446,6 @@ func (s *Server) processTx(tx *core.Transaction) error {
 }
 
 func (s *Server) broadcast(payload []byte) error {
-	fmt.Println("broadcasting to peers...")
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, peer := range s.peerMap {

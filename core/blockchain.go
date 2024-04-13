@@ -17,7 +17,10 @@ type Blockchain struct {
 	blocks     []*Block
 	blockStore map[core_types.Hash]*Block
 	//TODO: add a diff mutex to make txSTore thread safe; currenlty both teh stores are usint he same mutex; which is bad!
-	txStore    map[core_types.Hash]*Transaction
+	txStore map[core_types.Hash]*Transaction
+	//TODO: impelment a better data structure to store the collection like merkle trees etc
+	//TODO: add a diff mutex to make collectionStore thread safe; currenlty both teh stores are usint he same mutex; which is bad!
+	collectionStore map[core_types.Hash]*CollectionTx
 
 	store     Storage
 	Validator Validator
@@ -29,14 +32,15 @@ type Blockchain struct {
 // Constructor for Blockchain
 func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 	bc := &Blockchain{
-		contractState: NewState(),
-		headers:       []*Header{},
-		store:         NewMemoryStore(),
-		logger:        logger,
-		Version:       1,
-		blocks:        make([]*Block, 1),
-		blockStore:    make(map[core_types.Hash]*Block),
-		txStore:       make(map[core_types.Hash]*Transaction),
+		contractState:   NewState(),
+		headers:         []*Header{},
+		store:           NewMemoryStore(),
+		logger:          logger,
+		Version:         1,
+		blocks:          make([]*Block, 1),
+		blockStore:      make(map[core_types.Hash]*Block),
+		txStore:         make(map[core_types.Hash]*Transaction),
+		collectionStore: make(map[core_types.Hash]*CollectionTx),
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -128,17 +132,30 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 
 	//run the block data i.e the code on the VM
 	for _, tx := range b.Transactions {
-		bc.logger.Log("msg", "executing code", "tx", tx.Hash(&TxHasher{}), "len of the data", len(tx.Data))
 		bc.txStore[tx.Hash(&TxHasher{})] = tx
 
-		vm := NewVM(tx.Data, bc.contractState)
-
-		if err := vm.Run(); err != nil {
-			return err
+		// execute the tx on the vm only if the data field is populated
+		if len(tx.Data) > 0 {
+			bc.logger.Log("msg", "executing code", "tx", tx.Hash(&TxHasher{}), "len of the data", len(tx.Data))
+			vm := NewVM(tx.Data, bc.contractState)
+			if err := vm.Run(); err != nil {
+				return err
+			}
+			// fmt.Printf("STATE : %+v\n", vm.contractState)
+			// result := vm.stack.Pop()
+			// fmt.Printf("VM : %+v\n", result)
 		}
-		// fmt.Printf("STATE : %+v\n", vm.contractState)
-		// result := vm.stack.Pop()
-		// fmt.Printf("VM : %+v\n", result)
+
+		switch t := tx.TxInner.(type) {
+		case *CollectionTx:
+			hash := tx.Hash(&TxHasher{})
+			bc.collectionStore[hash] = t
+
+			bc.logger.Log("msg", "added collection tx to the store", "hash", hash)
+		case *MintTx:
+		default:
+			fmt.Errorf("unsupported tx type %v", t)
+		}
 
 	}
 	bc.lock.Unlock()

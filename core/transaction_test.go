@@ -2,11 +2,37 @@ package core
 
 import (
 	"bytes"
+	"encoding/gob"
+	"fmt"
 	"testing"
 
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestNFTTx(t *testing.T) {
+	pk := crypto_lib.GeneratePrivateKey()
+	collection := &CollectionTx{
+		Fee:      100,
+		MetaData: []byte("Hello World Token from China!"),
+		Quantity: 20000,
+	}
+
+	tx := &Transaction{
+		TxType:  TxTypeCollection,
+		TxInner: collection,
+	}
+
+	tx.Sign(pk)
+	buf := &bytes.Buffer{}
+	assert.Nil(t, gob.NewEncoder(buf).Encode(tx))
+
+	txDecoded := new(Transaction)
+	assert.Nil(t, gob.NewDecoder(buf).Decode(txDecoded))
+
+	fmt.Printf("Decoded Tx: %v\n", txDecoded)
+	assert.Equal(t, tx, txDecoded)
+}
 
 func TestSignTX(t *testing.T) {
 	tx := &Transaction{

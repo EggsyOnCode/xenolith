@@ -66,7 +66,13 @@ func TCPTester() {
 
 	pk := crypto_lib.GeneratePrivateKey()
 	// data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
-	tx := core.NewTransaction(contract())
+	tx := core.NewTransaction(nil)
+	tx.TxType = core.TxTypeCollection
+	tx.TxInner = &core.CollectionTx{
+		Fee:      100,
+		MetaData: []byte("Hello World Token from China!"),
+		Quantity: 20000,
+	}
 	fmt.Printf("====> tx hash %x\n", tx.Hash(core.TxHasher{}))
 	tx.Sign(pk)
 	tx.SetTimeStamp(time.Now().Unix())
