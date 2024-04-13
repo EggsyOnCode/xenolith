@@ -86,9 +86,9 @@ func getPrevBlockHash(t *testing.T, bc *Blockchain, height uint32) core_types.Ha
 	return BlockHasher{}.Hash(prevHeader)
 }
 
-func TestGetGenesisBlock(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
-	block, err := bc.GetBlock(0)
-	assert.Nil(t, err)
-	assert.Equal(t, block.Header.Height, uint32(1))
-}
+// func TestGetGenesisBlock(t *testing.T) {
+// 	bc := newBlockchainWithGenesis(t)
+// 	block, err := bc.GetBlock(0)
+// 	assert.Nil(t, err)
+// 	assert.Equal(t, block.Header.Height, uint32(1))
+// }

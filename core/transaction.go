@@ -9,13 +9,6 @@ import (
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 )
 
-type TxType byte
-
-const (
-	TxTypeCollection TxType = iota // 0x0
-	TxTypeNFT
-)
-
 type CollectionTx struct {
 	Fee      uint64
 	MetaData []byte
@@ -32,7 +25,6 @@ type MintTx struct {
 }
 
 type Transaction struct {
-	TxType    TxType
 	TxInner   any
 	Data      []byte
 	From      crypto_lib.PublicKey

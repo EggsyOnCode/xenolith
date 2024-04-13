@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
 	"testing"
 
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
@@ -19,7 +18,6 @@ func TestNFTTx(t *testing.T) {
 	}
 
 	tx := &Transaction{
-		TxType:  TxTypeCollection,
 		TxInner: collection,
 	}
 
@@ -30,7 +28,6 @@ func TestNFTTx(t *testing.T) {
 	txDecoded := new(Transaction)
 	assert.Nil(t, gob.NewDecoder(buf).Decode(txDecoded))
 
-	fmt.Printf("Decoded Tx: %v\n", txDecoded)
 	assert.Equal(t, tx, txDecoded)
 }
 

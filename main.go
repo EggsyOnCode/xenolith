@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/EggsyOnCode/xenolith/core"
+	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/EggsyOnCode/xenolith/network"
 )
@@ -39,9 +41,14 @@ func main() {
 	time.Sleep(2 * time.Second)
 
 	ticker := time.NewTicker(1 * time.Second)
+
+	//1 - mint a collection
+	//2 - mint an nft of that collection
+	collectionOwnerPk := crypto_lib.GeneratePrivateKey()
+	collection := mintCollection(*collectionOwnerPk)
 	go func() {
-		for {
-			go TCPTester()
+		for i := 0; i < 20; i++ {
+			go mintNfT(*collectionOwnerPk, collection)
 			<-ticker.C
 		}
 	}()
@@ -62,19 +69,16 @@ func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNod
 	}
 	return localNode
 }
-func TCPTester() {
 
-	pk := crypto_lib.GeneratePrivateKey()
-	// data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
+func mintCollection(pk crypto_lib.PrivateKey) core_types.Hash {
 	tx := core.NewTransaction(nil)
-	tx.TxType = core.TxTypeCollection
 	tx.TxInner = &core.CollectionTx{
 		Fee:      100,
 		MetaData: []byte("Hello World Token from China!"),
 		Quantity: 20000,
 	}
 	fmt.Printf("====> tx hash %x\n", tx.Hash(core.TxHasher{}))
-	tx.Sign(pk)
+	tx.Sign(&pk)
 	tx.SetTimeStamp(time.Now().Unix())
 
 	buf := &bytes.Buffer{}
@@ -89,6 +93,46 @@ func TCPTester() {
 	// }
 
 	//making http req to our json rpc server ; sending tx over the wire
+
+	err := sendViaHTTP(buf.Bytes())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	//TODO: the hash of the collectiron can ;t be the hash of the tx ; fix this!
+	return tx.Hash(core.TxHasher{})
+}
+
+func mintNfT(pk crypto_lib.PrivateKey, collectionHash core_types.Hash) {
+	tx := core.NewTransaction(nil)
+	metaData := map[string]string{
+		"height": "100",
+		"color":  "red",
+		"size":   "large",
+	}
+
+	metaBuf := &bytes.Buffer{}
+	if err := gob.NewEncoder(metaBuf).Encode(metaData); err != nil {
+		panic(err)
+	}
+
+	tx.TxInner = &core.MintTx{
+		Fee:             100,
+		MetaData:        metaBuf.Bytes(),
+		Collection:      collectionHash,
+		NFT:             core_types.GenerateRandomHash(32),
+		CollectionOwner: pk.PublicKey(),
+		//TOOD: add signature
+	}
+
+	fmt.Printf("====> tx hash of nft minting tx %x\n", tx.Hash(core.TxHasher{}))
+	tx.Sign(&pk)
+	tx.SetTimeStamp(time.Now().Unix())
+
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		fmt.Println(err)
+	}
 
 	err := sendViaHTTP(buf.Bytes())
 	if err != nil {

@@ -21,6 +21,7 @@ type Blockchain struct {
 	//TODO: impelment a better data structure to store the collection like merkle trees etc
 	//TODO: add a diff mutex to make collectionStore thread safe; currenlty both teh stores are usint he same mutex; which is bad!
 	collectionStore map[core_types.Hash]*CollectionTx
+	mintStore       map[core_types.Hash]*MintTx
 
 	store     Storage
 	Validator Validator
@@ -41,6 +42,7 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		blockStore:      make(map[core_types.Hash]*Block),
 		txStore:         make(map[core_types.Hash]*Transaction),
 		collectionStore: make(map[core_types.Hash]*CollectionTx),
+		mintStore:       make(map[core_types.Hash]*MintTx),
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -127,6 +129,30 @@ func (bc *Blockchain) GetTxByHash(hash core_types.Hash) (*Transaction, error) {
 
 }
 
+func (bc *Blockchain) handleNativeNFT(tx *Transaction) error {
+	hash := tx.Hash(&TxHasher{})
+	switch t := tx.TxInner.(type) {
+	case *CollectionTx:
+		bc.collectionStore[hash] = t
+
+		bc.logger.Log("msg", "added collection tx to the store", "hash", hash)
+	case *MintTx:
+		_, ok := bc.collectionStore[t.Collection]
+		if !ok {
+			return fmt.Errorf("collection (%v) does NOt exist ", t.Collection)
+		}
+
+		bc.mintStore[hash] = t
+
+		bc.logger.Log("msg", "created new NFT mint", "nft", t.NFT, "collection", t.Collection)
+
+	default:
+		return fmt.Errorf("unsupported tx type %v", t)
+	}
+
+	return nil
+}
+
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	bc.lock.Lock()
 
@@ -144,17 +170,12 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 			// fmt.Printf("STATE : %+v\n", vm.contractState)
 			// result := vm.stack.Pop()
 			// fmt.Printf("VM : %+v\n", result)
-		}
 
-		switch t := tx.TxInner.(type) {
-		case *CollectionTx:
-			hash := tx.Hash(&TxHasher{})
-			bc.collectionStore[hash] = t
-
-			bc.logger.Log("msg", "added collection tx to the store", "hash", hash)
-		case *MintTx:
-		default:
-			fmt.Errorf("unsupported tx type %v", t)
+			if tx.TxInner != nil {
+				if err := bc.handleNativeNFT(tx); err != nil {
+					return err
+				}
+			}
 		}
 
 	}
