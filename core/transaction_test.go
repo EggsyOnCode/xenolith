@@ -31,6 +31,21 @@ func TestNFTTx(t *testing.T) {
 	assert.Equal(t, tx, txDecoded)
 }
 
+func TestNativeTokenTransfer(t *testing.T) {
+	senderPk := crypto_lib.GeneratePrivateKey()
+	receiverPk := crypto_lib.GeneratePrivateKey()
+
+	tx := &Transaction{
+		From:  senderPk.PublicKey(),
+		To:    receiverPk.PublicKey(),
+		Value: 100,
+	}
+
+	assert.Nil(t, tx.Sign(senderPk))
+	assert.NotNil(t, tx.Signature)
+
+}
+
 func TestSignTX(t *testing.T) {
 	tx := &Transaction{
 		Data: []byte("Hello World"),

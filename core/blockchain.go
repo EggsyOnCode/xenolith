@@ -22,6 +22,8 @@ type Blockchain struct {
 	//TODO: add a diff mutex to make collectionStore thread safe; currenlty both teh stores are usint he same mutex; which is bad!
 	collectionStore map[core_types.Hash]*CollectionTx
 	mintStore       map[core_types.Hash]*MintTx
+	stateLock       sync.RWMutex
+	accountState    *AccountState
 
 	store     Storage
 	Validator Validator
@@ -43,6 +45,8 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		txStore:         make(map[core_types.Hash]*Transaction),
 		collectionStore: make(map[core_types.Hash]*CollectionTx),
 		mintStore:       make(map[core_types.Hash]*MintTx),
+		accountState:    NewAccountState(),
+		stateLock:       sync.RWMutex{},
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -171,11 +175,22 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 			// result := vm.stack.Pop()
 			// fmt.Printf("VM : %+v\n", result)
 
-			if tx.TxInner != nil {
-				if err := bc.handleNativeNFT(tx); err != nil {
-					return err
-				}
+		}
+
+		//handling native NFT tokens
+		if tx.TxInner != nil {
+			if err := bc.handleNativeNFT(tx); err != nil {
+				return err
 			}
+		}
+
+		//otherwise handle the native token tx
+		if tx.Value > 0 {
+			fmt.Printf("someone (%s) sending tokens to someone (%s) of value (%v )\n", tx.From, tx.To, tx.Value)
+
+			err := bc.handleTransferNativeTokens(tx)
+			fmt.Printf("Error transferring tokens : %v \n", err)
+			return err
 		}
 
 	}
@@ -198,6 +213,12 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	)
 
 	return bc.store.Put(b)
+}
+
+func (bc *Blockchain) handleTransferNativeTokens(tx *Transaction) error {
+	bc.logger.Log("msg", "trasnfering native tokens between addresses", "from", tx.From, "to", tx.To, "value", tx.Value)
+
+	return bc.accountState.TransferFunds(tx.From.Address(), tx.To.Address(), tx.Value)
 }
 
 func (bc *Blockchain) HasBlock(height uint32) bool {

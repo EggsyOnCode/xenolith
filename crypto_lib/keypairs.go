@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"math/big"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
@@ -43,6 +44,9 @@ func (p *PrivateKey) PublicKey() []byte {
 // slice of bytes which would be sent over the network
 type PublicKey []byte
 
+func (p PublicKey) String() string {
+	return hex.EncodeToString(p)
+}
 func (p *PublicKey) Address() core_types.Address {
 	hash := sha256.Sum256(*p)
 
@@ -54,7 +58,7 @@ type Signature struct {
 	R, S *big.Int
 }
 
-func (sig *Signature) String() string{
+func (sig *Signature) String() string {
 	return sig.R.String() + sig.S.String()
 }
 

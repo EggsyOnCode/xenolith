@@ -40,18 +40,24 @@ func main() {
 
 	time.Sleep(2 * time.Second)
 
-	ticker := time.NewTicker(1 * time.Second)
+	// ticker := time.NewTicker(1 * time.Second)
 
-	//1 - mint a collection
-	//2 - mint an nft of that collection
-	collectionOwnerPk := crypto_lib.GeneratePrivateKey()
-	collection := mintCollection(*collectionOwnerPk)
-	go func() {
-		for i := 0; i < 20; i++ {
-			go mintNfT(*collectionOwnerPk, collection)
-			<-ticker.C
-		}
-	}()
+	// //1 - mint a collection
+	// //2 - mint an nft of that collection
+	// collectionOwnerPk := crypto_lib.GeneratePrivateKey()
+	// collection := mintCollection(*collectionOwnerPk)
+	// go func() {
+	// 	for i := 0; i < 20; i++ {
+	// 		go mintNfT(*collectionOwnerPk, collection)
+	// 		<-ticker.C
+	// 	}
+	// }()
+
+
+	if err := sendTokenTx(); err != nil {
+		panic(err)
+	}
+
 	select {}
 }
 
@@ -68,6 +74,32 @@ func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNod
 		log.Fatal(err)
 	}
 	return localNode
+}
+
+func sendTokenTx() error {
+	senderPk := crypto_lib.GeneratePrivateKey()
+	receiverPk := crypto_lib.GeneratePrivateKey()
+	tx := &core.Transaction{
+		From:  senderPk.PublicKey(),
+		To:    receiverPk.PublicKey(),
+		Value: 1000,
+	}
+	fmt.Printf("====> tx hash %x\n", tx.Hash(core.TxHasher{}))
+	tx.Sign(crypto_lib.GeneratePrivateKey())
+	tx.SetTimeStamp(time.Now().Unix())
+
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		return err
+	}
+
+	err := sendViaHTTP(buf.Bytes())
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 func mintCollection(pk crypto_lib.PrivateKey) core_types.Hash {
