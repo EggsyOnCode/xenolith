@@ -7,66 +7,111 @@ import (
 	"github.com/EggsyOnCode/xenolith/core_types"
 )
 
+var (
+	ErrAccountNotFound   = fmt.Errorf("account not found")
+	ErrInsufficientFunds = fmt.Errorf("insufficient funds")
+)
+
+type Account struct {
+	Address core_types.Address
+	//TODO: Make the Balance a BigInt to store fractions values
+	Balance uint64
+}
+
+func (a *Account) String() string {
+	return fmt.Sprintf("%d", a.Balance)
+}
+
 type AccountState struct {
-	mu    sync.RWMutex
-	state map[core_types.Address]uint64
+	mu sync.RWMutex
+	//be careful with ptrs
+	//TODO: use of atomic values when changing Account Data
+	accounts map[core_types.Address]*Account
 }
 
 func NewAccountState() *AccountState {
 	return &AccountState{
-		state: make(map[core_types.Address]uint64),
+		accounts: make(map[core_types.Address]*Account),
 	}
 }
 
-func checkAccountExistence(s *AccountState, addr core_types.Address) error {
-	if _, ok := s.state[addr]; !ok {
-		return fmt.Errorf("account not found %v", addr)
+func (a *AccountState) CreateAccount(addr core_types.Address) *Account {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.accounts[addr] != nil {
+		return a.accounts[addr]
 	}
-	return nil
+
+	account := &Account{
+		Address: addr,
+		Balance: 0,
+	}
+
+	a.accounts[addr] = account
+
+	return account
+
 }
 
-func (s *AccountState) GetBalance(addr core_types.Address) (uint64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if err := checkAccountExistence(s, addr); err != nil {
+func (a *AccountState) GetAccount(addr core_types.Address) (*Account, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.getAccountWithoutLock(addr)
+}
+
+func (a *AccountState) getAccountWithoutLock(addr core_types.Address) (*Account, error) {
+	account, ok := a.accounts[addr]
+	if !ok {
+		return nil, ErrAccountNotFound
+	}
+
+	return account, nil
+}
+
+func (a *AccountState) GetBalance(addr core_types.Address) (uint64, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	account, err := a.getAccountWithoutLock(addr)
+	if err != nil {
 		return 0, err
 	}
 
-	return s.state[addr], nil
+	return account.Balance, nil
 }
 
-func (s *AccountState) AddBalance(addr core_types.Address, b uint64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	balance, ok := s.state[addr]
-	if !ok {
-		s.state[addr] = b
-		return nil
-	}
-	s.state[addr] = balance + b
-	return nil
-}
+func (a *AccountState) Transfer(from, to core_types.Address, amt uint64) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-func (s *AccountState) SubBalance(addr core_types.Address, amt uint64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := checkAccountExistence(s, addr); err != nil {
-		return err
-	}
-	balance := s.state[addr]
-	if balance < amt {
-		return fmt.Errorf("insufficient balance %v", balance)
-	}
-	s.state[addr] -= amt
-	return nil
-}
-
-func (s *AccountState) TransferFunds(from, to core_types.Address, amt uint64) error {
-	if err := s.SubBalance(from, amt); err != nil {
+	fromAccount, err := a.getAccountWithoutLock(from)
+	if err != nil {
 		return err
 	}
 
-	return s.AddBalance(to, amt)
+	if fromAccount.Address.String() != "996fb92427ae41e4649b934ca495991b7852b855" {
+		if fromAccount.Balance < amt {
+			return ErrInsufficientFunds
+		}
+	}
+
+	//usage of atomic vals here perhaps!! TODO
+	//only transfer if the account has a balance
+	if fromAccount.Balance != 0 {
+		fromAccount.Balance -= amt
+	}
+
+	if a.accounts[to] == nil {
+		a.accounts[to] = &Account{
+			Address: to,
+			Balance: amt,
+		}
+	}
+
+	a.accounts[to].Balance += amt
+
+	return nil
 }
 
 type State struct {

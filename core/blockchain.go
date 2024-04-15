@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
+	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/go-kit/log"
 )
 
@@ -32,8 +33,17 @@ type Blockchain struct {
 	contractState *State
 }
 
-// Constructor for Blockchain
+// Constructor for Blckchain
 func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
+	//the responsbility of creating and maanging the account state falls on the blockchain
+	//read the accountState from Disk (TODO)
+	accountState := NewAccountState()
+
+	//the default value of Public Key
+	coinbase := crypto_lib.PublicKey{}
+	fmt.Println("COINBASE : ", coinbase.Address())
+	accountState.CreateAccount(coinbase.Address())
+
 	bc := &Blockchain{
 		contractState:   NewState(),
 		headers:         []*Header{},
@@ -45,7 +55,7 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		txStore:         make(map[core_types.Hash]*Transaction),
 		collectionStore: make(map[core_types.Hash]*CollectionTx),
 		mintStore:       make(map[core_types.Hash]*MintTx),
-		accountState:    NewAccountState(),
+		accountState:    accountState,
 		stateLock:       sync.RWMutex{},
 	}
 
@@ -158,7 +168,7 @@ func (bc *Blockchain) handleNativeNFT(tx *Transaction) error {
 }
 
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
-	bc.lock.Lock()
+	bc.stateLock.Lock()
 
 	//run the block data i.e the code on the VM
 	for _, tx := range b.Transactions {
@@ -186,15 +196,19 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 
 		//otherwise handle the native token tx
 		if tx.Value > 0 {
-			fmt.Printf("someone (%s) sending tokens to someone (%s) of value (%v )\n", tx.From, tx.To, tx.Value)
-
-			err := bc.handleTransferNativeTokens(tx)
-			fmt.Printf("Error transferring tokens : %v \n", err)
-			return err
+			if err := bc.handleTransferNativeTokens(tx); err != nil {
+				fmt.Printf("error while transferring tokens %v\n", err)
+				return err
+			}
 		}
 
 	}
-	bc.lock.Unlock()
+
+	bc.stateLock.Unlock()
+
+	fmt.Println("==========>>>ACCOUNT STATE<<<<<===========")
+	fmt.Printf("Account state : %+v\n", bc.accountState.accounts)
+	fmt.Println("==========>>>ACCOUNT STATE<<<<<===========")
 
 	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)
@@ -218,7 +232,7 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 func (bc *Blockchain) handleTransferNativeTokens(tx *Transaction) error {
 	bc.logger.Log("msg", "trasnfering native tokens between addresses", "from", tx.From, "to", tx.To, "value", tx.Value)
 
-	return bc.accountState.TransferFunds(tx.From.Address(), tx.To.Address(), tx.Value)
+	return bc.accountState.Transfer(tx.From.Address(), tx.To.Address(), tx.Value)
 }
 
 func (bc *Blockchain) HasBlock(height uint32) bool {

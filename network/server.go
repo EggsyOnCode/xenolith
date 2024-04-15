@@ -151,7 +151,7 @@ free:
 
 		case tx := <-s.txCh:
 			err := s.processTx(tx)
-			if err !=nil{
+			if err != nil {
 				s.Logger.Log("err", err)
 				continue
 			}
@@ -171,7 +171,10 @@ func (s *Server) validatorLoop() {
 	for {
 		//whenver the ticker value is decremented
 		<-ticker.C
-		s.createNewBlock()
+		if err := s.createNewBlock(); err != nil {
+			s.Logger.Log("msg", "err creating block", "error", err)
+			continue
+		}
 	}
 }
 
@@ -489,10 +492,22 @@ func genesisBlock() *core.Block {
 		Version:   1,
 		Height:    0,
 		DataHash:  core_types.Hash{},
-		Timestamp: 000000,
+		//can't do time.Now cuz the hash of the genesisBlock will change
+		Timestamp: 0000,
 	}
 
 	block := core.NewBlock(headers, nil)
+
+	//the first tx transferring funds to the coinbase
+
+	//the default value of Public Key
+	coinbase := crypto_lib.PublicKey{}
+	tx := core.NewTransaction(nil)
+	tx.From = coinbase
+	tx.To = coinbase
+	tx.Value = 10000000
+	block.Transactions = append(block.Transactions, tx)
+
 	privK := crypto_lib.GeneratePrivateKey()
 	block.Sign(privK)
 

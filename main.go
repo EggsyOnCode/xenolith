@@ -26,9 +26,9 @@ func main() {
 	remoteNode1 := makeServer(nil, "Remote_1", ":5000", nil, "")
 	go remoteNode1.Start()
 
-	pk := crypto_lib.GeneratePrivateKey()
+	validatorPk := crypto_lib.GeneratePrivateKey()
 
-	localNode := makeServer(pk, "LOCAL", ":3000", BootStrapNodes, ":9999")
+	localNode := makeServer(validatorPk, "LOCAL", ":3000", BootStrapNodes, ":9999")
 	go localNode.Start()
 
 	go func() {
@@ -53,19 +53,18 @@ func main() {
 	// 	}
 	// }()
 
-
-	if err := sendTokenTx(); err != nil {
-		panic(err)
-	}
+	// if err := sendTokenTx(validatorPk); err != nil {
+	// 	panic(err)
+	// }
 
 	select {}
 }
 
-func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNodes []string, apiListenAddr string) *network.Server {
+func makeServer(validatorPk *crypto_lib.PrivateKey, id string, listenAddr string, seedNodes []string, apiListenAddr string) *network.Server {
 	serverOpts := network.ServerOpts{
 		ListenAddr:     listenAddr,
 		ID:             id,
-		PrivateKey:     pk,
+		PrivateKey:     validatorPk,
 		BootStrapNodes: seedNodes,
 		APIListenAddr:  apiListenAddr,
 	}
@@ -76,16 +75,15 @@ func makeServer(pk *crypto_lib.PrivateKey, id string, listenAddr string, seedNod
 	return localNode
 }
 
-func sendTokenTx() error {
-	senderPk := crypto_lib.GeneratePrivateKey()
+func sendTokenTx(pk *crypto_lib.PrivateKey) error {
 	receiverPk := crypto_lib.GeneratePrivateKey()
 	tx := &core.Transaction{
-		From:  senderPk.PublicKey(),
+		From:  pk.PublicKey(),
 		To:    receiverPk.PublicKey(),
 		Value: 1000,
 	}
 	fmt.Printf("====> tx hash %x\n", tx.Hash(core.TxHasher{}))
-	tx.Sign(crypto_lib.GeneratePrivateKey())
+	tx.Sign(pk)
 	tx.SetTimeStamp(time.Now().Unix())
 
 	buf := &bytes.Buffer{}
@@ -102,7 +100,7 @@ func sendTokenTx() error {
 
 }
 
-func mintCollection(pk crypto_lib.PrivateKey) core_types.Hash {
+func mintCollection(validatorPk crypto_lib.PrivateKey) core_types.Hash {
 	tx := core.NewTransaction(nil)
 	tx.TxInner = &core.CollectionTx{
 		Fee:      100,
@@ -110,7 +108,7 @@ func mintCollection(pk crypto_lib.PrivateKey) core_types.Hash {
 		Quantity: 20000,
 	}
 	fmt.Printf("====> tx hash %x\n", tx.Hash(core.TxHasher{}))
-	tx.Sign(&pk)
+	tx.Sign(&validatorPk)
 	tx.SetTimeStamp(time.Now().Unix())
 
 	buf := &bytes.Buffer{}
@@ -135,7 +133,7 @@ func mintCollection(pk crypto_lib.PrivateKey) core_types.Hash {
 	return tx.Hash(core.TxHasher{})
 }
 
-func mintNfT(pk crypto_lib.PrivateKey, collectionHash core_types.Hash) {
+func mintNfT(validatorPk crypto_lib.PrivateKey, collectionHash core_types.Hash) {
 	tx := core.NewTransaction(nil)
 	metaData := map[string]string{
 		"height": "100",
@@ -153,12 +151,12 @@ func mintNfT(pk crypto_lib.PrivateKey, collectionHash core_types.Hash) {
 		MetaData:        metaBuf.Bytes(),
 		Collection:      collectionHash,
 		NFT:             core_types.GenerateRandomHash(32),
-		CollectionOwner: pk.PublicKey(),
+		CollectionOwner: validatorPk.PublicKey(),
 		//TOOD: add signature
 	}
 
 	fmt.Printf("====> tx hash of nft minting tx %x\n", tx.Hash(core.TxHasher{}))
-	tx.Sign(&pk)
+	tx.Sign(&validatorPk)
 	tx.SetTimeStamp(time.Now().Unix())
 
 	buf := &bytes.Buffer{}
@@ -215,8 +213,8 @@ func sendViaHTTP(b []byte) error {
 // 	}()
 
 // 	//validator node
-// 	pk := crypto_lib.GeneratePrivateKey()
-// 	localServer := makeServer(transports[0], pk, "LOCAL")
+// 	validatorPk := crypto_lib.GeneratePrivateKey()
+// 	localServer := makeServer(transports[0], validatorPk, "LOCAL")
 // 	localServer.Start()
 // }
 
@@ -229,10 +227,10 @@ func sendViaHTTP(b []byte) error {
 // }
 
 // func sendTx(localT network.Transport, to network.NetAddr) error {
-// 	pk := crypto_lib.GeneratePrivateKey()
+// 	validatorPk := crypto_lib.GeneratePrivateKey()
 // 	// data := []byte{0x03, 0x0a, 0x04, 0x0a, 0x0b, 0x46, 0x0c, 0x4f, 0x0c, 0x4f, 0x0c, 0x03, 0x0a, 0x0d, 0x0f}
 // 	tx := core.NewTransaction(contract())
-// 	tx.Sign(pk)
+// 	tx.Sign(validatorPk)
 // 	tx.SetTimeStamp(time.Now().Unix())
 
 // 	buf := &bytes.Buffer{}
