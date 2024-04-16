@@ -1,14 +1,89 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
+	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/go-kit/log"
 	"github.com/stretchr/testify/assert"
 )
 
+func TestSendNativeTokenTransferSuccess(t *testing.T) {
+	bc := newBlockchainWithGenesis(t)
+	a := bc.accountState
+	// teh validator's priv key
+	signer := crypto_lib.GeneratePrivateKey()
+
+	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))
+
+	pkAlice := crypto_lib.GeneratePrivateKey()
+	addrAlice := pkAlice.PublicKey().Address()
+	accAlice := a.CreateAccount(addrAlice)
+	pkBob := crypto_lib.GeneratePrivateKey()
+	accBob := a.CreateAccount(pkBob.PublicKey().Address())
+	fmt.Printf("Alice: %v\n", accAlice.Address)
+	fmt.Printf("Bob: %v\n", accBob.Address)
+
+	a.accounts[addrAlice].Balance = uint64(150)
+
+	tx := NewTransaction([]byte{})
+	tx.From = pkAlice.PublicKey()
+	tx.To = pkBob.PublicKey()
+	tx.Value = uint64(100)
+	tx.Sign(pkAlice)
+
+	assert.Nil(t, block.AddTx(tx))
+	assert.Nil(t, block.Sign(signer))
+	newDataHash, _ := CalculateDataHash(block.Transactions)
+	assert.Equal(t, block.Header.DataHash, newDataHash)
+
+	// add the block to the blockchain
+	assert.Nil(t, bc.AddBlock(block))
+	assert.Equal(t, bc.accountState.accounts[addrAlice].Address, addrAlice)
+	assert.Equal(t, bc.accountState.accounts[pkBob.PublicKey().Address()].Address, pkBob.PublicKey().Address())
+	assert.Equal(t, bc.accountState.accounts[addrAlice].Balance, uint64(50))
+}
+
+func TestSendNativeTokenTransferHackingAttempt(t *testing.T) {
+	bc := newBlockchainWithGenesis(t)
+	a := bc.accountState
+	// teh validator's priv key
+	signer := crypto_lib.GeneratePrivateKey()
+
+	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))
+
+	pkAlice := crypto_lib.GeneratePrivateKey()
+	addrAlice := pkAlice.PublicKey().Address()
+	accAlice := a.CreateAccount(addrAlice)
+	pkBob := crypto_lib.GeneratePrivateKey()
+	accBob := a.CreateAccount(pkBob.PublicKey().Address())
+	fmt.Printf("Alice: %v\n", accAlice.Address)
+	fmt.Printf("Bob: %v\n", accBob.Address)
+
+	a.accounts[addrAlice].Balance = uint64(150)
+
+	tx := NewTransaction([]byte{})
+	tx.From = pkAlice.PublicKey()
+	tx.To = pkBob.PublicKey()
+	tx.Value = uint64(100)
+	tx.Sign(pkAlice)
+
+	assert.Nil(t, block.Sign(signer))
+	newDataHash, _ := CalculateDataHash(block.Transactions)
+	assert.Equal(t, block.Header.DataHash, newDataHash)
+
+	// the tx is intercepted by a bad actor
+	hackerPk := crypto_lib.GeneratePrivateKey()
+	tx.To = hackerPk.PublicKey()
+
+	assert.Equal(t, tx.To.Address(), hackerPk.PublicKey().Address())
+	assert.Nil(t, block.AddTx(tx))
+	assert.Nil(t, bc.AddBlock(block))
+	assert.Equal(t, bc.accountState.accounts[hackerPk.PublicKey().Address()].Balance, uint64(100))
+}
 func TestBlockchain(t *testing.T) {
 	//genesis block
 	bc := newBlockchainWithGenesis(t)

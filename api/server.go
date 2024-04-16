@@ -12,7 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// ///helper types for user friendly transforamtions
+// ///helper types for user friendly transformations
 type TxResponse struct {
 	TxCount  uint32
 	TxHashes []string

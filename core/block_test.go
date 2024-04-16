@@ -11,20 +11,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func randomBlock(height uint32) *Block {
+func randomBlock(t *testing.T, height uint32, prevHash core_types.Hash) *Block {
 	header := &Header{
 		Version:       1,
 		Height:        height,
-		PrevBlockHash: core_types.GenerateRandomHash(32),
+		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
 	}
-	tx := &Transaction{
-		Data: []byte("Hello World"),
-	}
-	return &Block{
-		Header:       header,
+	tx := randomTxWithSignature(t)
+	block := &Block{
+		Header: header,
 		Transactions: []*Transaction{tx},
 	}
+	datahash, err := CalculateDataHash(block.Transactions)
+	assert.Nil(t, err)
+	block.Header.DataHash = datahash
+
+	return block
 }
 
 func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.Hash) *Block {
@@ -52,10 +55,11 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 	assert.Nil(t, block.Sign(priv))
 	return block
 }
-func TestBlock(t *testing.T) {
-	block := randomBlock(1)
-	fmt.Println(block.Hash(BlockHasher{}))
-}
+
+// func TestBlock(t *testing.T) {
+// 	block := randomBlock(t, 1, getPrevBlockHash(t, ))
+// 	fmt.Println(block.Hash(BlockHasher{}))
+// }
 
 func TestSignAndVerifyBlock(t *testing.T) {
 	block := randomBlockWithSignature(t, 3, core_types.GenerateRandomHash(32))
@@ -80,8 +84,6 @@ func TestCodecBlock(t *testing.T) {
 	assert.Equal(t, block.Header, blockDecoded.Header)
 
 }
-
-
 
 // func TestVerifyFail(t *testing.T){
 // 	block := randomBlock(1)

@@ -39,7 +39,8 @@ func (a *AccountState) CreateAccount(addr core_types.Address) *Account {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.accounts[addr] != nil {
+	// Check if the account already exists
+	if _, ok := a.accounts[addr]; ok {
 		return a.accounts[addr]
 	}
 
@@ -62,9 +63,10 @@ func (a *AccountState) GetAccount(addr core_types.Address) (*Account, error) {
 }
 
 func (a *AccountState) getAccountWithoutLock(addr core_types.Address) (*Account, error) {
+	fmt.Printf("Account State %v\n", a.accounts)
 	account, ok := a.accounts[addr]
 	if !ok {
-		return nil, ErrAccountNotFound
+		return nil, fmt.Errorf("account %v not found", addr)
 	}
 
 	return account, nil
@@ -107,6 +109,7 @@ func (a *AccountState) Transfer(from, to core_types.Address, amt uint64) error {
 			Address: to,
 			Balance: amt,
 		}
+		return nil
 	}
 
 	a.accounts[to].Balance += amt

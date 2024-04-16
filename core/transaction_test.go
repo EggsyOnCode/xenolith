@@ -92,3 +92,13 @@ func TestCodecTx(t *testing.T) {
 	assert.Equal(t, tx.Data, txDecoded.Data)
 
 }
+
+func randomTxWithSignature(t *testing.T) *Transaction {
+	privKey := crypto_lib.GeneratePrivateKey()
+	tx := Transaction{
+		Data: []byte("foo"),
+	}
+	assert.Nil(t, tx.Sign(privKey))
+
+	return &tx
+}

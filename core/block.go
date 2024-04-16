@@ -119,6 +119,21 @@ func (b *Block) Verify() error {
 	return nil
 }
 
+func (b *Block) AddTx(tx *Transaction) error{
+	ans, _ :=  tx.Verify()
+	if !ans{
+		return fmt.Errorf("Transaction not signed")
+	}
+	b.Transactions = append(b.Transactions, tx)
+	hash , err := CalculateDataHash(b.Transactions)
+	if err !=nil{
+		fmt.Printf("Error calculating data hash: %v", err)
+		return err
+	}
+	b.Header.DataHash = hash
+	return nil
+}
+
 func CalculateDataHash(tx []*Transaction) (hash core_types.Hash, err error) {
 	//hashing all the tx data
 	buf := &bytes.Buffer{}
