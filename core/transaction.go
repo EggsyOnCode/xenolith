@@ -59,7 +59,11 @@ func (t *Transaction) Hash(h Hasher[*Transaction]) core_types.Hash {
 
 func (t *Transaction) Sign(priv *crypto_lib.PrivateKey) error {
 	// we sign the hash of the tx with our private key
-	hash := t.Hash(TxHasher{})
+	// hash := t.Hash(TxHasher{})
+
+	// we hash it from the scratch; because the tx can only be signed once
+	// therefore its the right place to calculate the hash of the tx
+	hash := TxHasher{}.Hash(t)
 
 	sig, err := priv.Sign(hash.ToSlice())
 	if err != nil {

@@ -20,7 +20,7 @@ func randomBlock(t *testing.T, height uint32, prevHash core_types.Hash) *Block {
 	}
 	tx := randomTxWithSignature(t)
 	block := &Block{
-		Header: header,
+		Header:       header,
 		Transactions: []*Transaction{tx},
 	}
 	datahash, err := CalculateDataHash(block.Transactions)
@@ -40,14 +40,11 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 
 	//generating a private key
 	priv := crypto_lib.GeneratePrivateKey()
-	tx := &Transaction{
-		Data: []byte("Hello World"),
-	}
-	tx.Sign(priv)
 	block := &Block{
-		Header:       header,
-		Transactions: []*Transaction{tx},
+		Header: header,
 	}
+	tx := randomTxWithSignature(t)
+	block.Transactions = append(block.Transactions, tx)
 	datahash, err := CalculateDataHash(block.Transactions)
 	assert.Nil(t, err)
 	block.Header.DataHash = datahash
@@ -85,19 +82,14 @@ func TestCodecBlock(t *testing.T) {
 
 }
 
-// func TestVerifyFail(t *testing.T){
-// 	block := randomBlock(1)
-// 	priv := crypto_lib.GeneratePrivateKey()
-// 	err := block.Sign(priv)
-// 	ver, _ := block.Verify()
-// 	assert.True(t, ver)
-// 	assert.Nil(t, err)
-// 	assert.Equal(t, block.Validator, crypto_lib.PublicKey(priv.PublicKey()))
-// 	fmt.Println(block.Signature)
+func TestVerifyFail(t *testing.T) {
+	block := randomBlockWithSignature(t, 1, core_types.GenerateRandomHash(32))
+	err := block.Verify()
+	assert.Nil(t, err)
+	fmt.Println(block.Signature)
 
-// 	//header info changing;
-// 	block.Header.Head = 20
-// 	verification, _ := block.Verify()
-// 	fmt.Println(verification)
-// 	assert.False(t, verification)
-// }
+	//header info changing;
+	block.Header.DataHash = core_types.Hash{}
+	err1 := block.Verify()
+	assert.NotNil(t, err1)
+}

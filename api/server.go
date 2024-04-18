@@ -63,6 +63,7 @@ func NewAPIServer(cfg ServerConfig, bc *core.Blockchain, ch chan *core.Transacti
 }
 
 func (s *Server) Start() error {
+
 	echo := echo.New()
 	echo.GET("/blocks/:hashID", s.handleGetBlock)
 	echo.GET("/tx/:txHash", s.handleGetTx)

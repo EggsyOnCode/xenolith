@@ -45,6 +45,7 @@ func TestNFTTx(t *testing.T) {
 	}
 
 	tx.Sign(pk)
+
 	buf := &bytes.Buffer{}
 	assert.Nil(t, gob.NewEncoder(buf).Encode(tx))
 
@@ -84,6 +85,7 @@ func TestTxVerification(t *testing.T) {
 		Data: []byte("Hello World"),
 	}
 	priv := crypto_lib.GeneratePrivateKey()
+	tx.From = priv.PublicKey()
 	err := tx.Sign(priv)
 	assert.Nil(t, err)
 	assert.NotNil(t, tx.Signature)
@@ -120,6 +122,7 @@ func randomTxWithSignature(t *testing.T) *Transaction {
 	privKey := crypto_lib.GeneratePrivateKey()
 	tx := Transaction{
 		Data: []byte("foo"),
+		From: privKey.PublicKey(),
 	}
 	assert.Nil(t, tx.Sign(privKey))
 

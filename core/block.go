@@ -107,12 +107,12 @@ func (b *Block) Verify() error {
 	}
 
 	for _, tx := range b.Transactions {
-		if ans, err := tx.Verify(); err != nil || !ans {
-			fmt.Printf("Error: %v\n", err)
-			return err
+		if ans, err := tx.Verify(); !ans {
+			return fmt.Errorf("invalid transaction with ans %v : %v", ans, err)
 		}
 	}
 
+	fmt.Printf("datahash is %v\n", b.Header.DataHash)
 	//also need to compare datahash of the slice of tx with the datahs of the proposed block
 	dataHash, _ := CalculateDataHash(b.Transactions)
 	if dataHash != b.Header.DataHash {

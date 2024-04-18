@@ -194,7 +194,7 @@ func (bc *Blockchain) handleTx(tx *Transaction) error {
 	//otherwise handle the native token tx
 	if tx.Value > 0 {
 		if err := bc.handleTransferNativeTokens(tx); err != nil {
-			fmt.Printf("error while transferring tokens %v\n", err)
+			bc.logger.Log("err", "error while handling transfer of native tokens", "err", err)
 			return err
 		}
 	}
