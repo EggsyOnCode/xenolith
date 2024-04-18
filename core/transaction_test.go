@@ -5,9 +5,32 @@ import (
 	"encoding/gob"
 	"testing"
 
+	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestVerifyTransactionWithTamper(t *testing.T) {
+	tx := NewTransaction(nil)
+
+	fromPrivKey := crypto_lib.GeneratePrivateKey()
+	toPrivKey := crypto_lib.GeneratePrivateKey()
+	hackerPrivKey := crypto_lib.GeneratePrivateKey()
+
+	tx.From = fromPrivKey.PublicKey()
+	tx.To = toPrivKey.PublicKey()
+	tx.Value = 666
+
+	assert.Nil(t, tx.Sign(fromPrivKey))
+
+	tx.hash = core_types.Hash{}
+
+	tx.To = hackerPrivKey.PublicKey()
+
+	ans, err := tx.Verify()
+	assert.Nil(t, err)
+	assert.False(t, ans)
+}
 
 func TestNFTTx(t *testing.T) {
 	pk := crypto_lib.GeneratePrivateKey()

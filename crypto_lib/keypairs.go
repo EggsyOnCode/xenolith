@@ -69,7 +69,7 @@ func (sig *Signature) String() string {
 }
 
 // msg can be verified with the public key
-func (sig *Signature) Verify(data []byte, p []byte) bool {
+func (sig *Signature) Verify(data []byte, p PublicKey) bool {
 	x, y := elliptic.UnmarshalCompressed(elliptic.P256(), p)
 	pk := &ecdsa.PublicKey{
 		Curve: elliptic.P256(),

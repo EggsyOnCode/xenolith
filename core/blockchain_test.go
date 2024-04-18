@@ -47,7 +47,7 @@ func TestSendNativeTokenTransferSuccess(t *testing.T) {
 	assert.Equal(t, bc.accountState.accounts[addrAlice].Balance, uint64(50))
 }
 
-func TestSendNativeTokenTransferHackingAttempt(t *testing.T) {
+func TestSendNativeTokenTransferWithTampering(t *testing.T) {
 	bc := newBlockchainWithGenesis(t)
 	a := bc.accountState
 	// teh validator's priv key
@@ -70,6 +70,7 @@ func TestSendNativeTokenTransferHackingAttempt(t *testing.T) {
 	tx.To = pkBob.PublicKey()
 	tx.Value = uint64(100)
 	tx.Sign(pkAlice)
+	fmt.Printf("Original To: %v\n", pkBob.PublicKey())
 
 	assert.Nil(t, block.Sign(signer))
 	newDataHash, _ := CalculateDataHash(block.Transactions)
@@ -79,10 +80,15 @@ func TestSendNativeTokenTransferHackingAttempt(t *testing.T) {
 	hackerPk := crypto_lib.GeneratePrivateKey()
 	tx.To = hackerPk.PublicKey()
 
+	fmt.Printf("Hacker: %v\n", hackerPk.PublicKey())
+
 	assert.Equal(t, tx.To.Address(), hackerPk.PublicKey().Address())
-	assert.Nil(t, block.AddTx(tx))
+	assert.NotNil(t, block.AddTx(tx))
+	fmt.Printf("block is signed by: %v\n", block.Validator)
 	assert.Nil(t, bc.AddBlock(block))
-	assert.Equal(t, bc.accountState.accounts[hackerPk.PublicKey().Address()].Balance, uint64(100))
+	// the hacker account won't exist hence hte below code would throw null ptr exception
+	// assert.NotNil(t, bc.accountState.accounts[hackerPk.PublicKey().Address()].Balance)
+	assert.Equal(t, bc.accountState.accounts[addrAlice].Balance, uint64(150))
 }
 func TestBlockchain(t *testing.T) {
 	//genesis block

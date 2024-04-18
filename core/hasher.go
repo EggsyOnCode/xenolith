@@ -3,7 +3,7 @@ package core
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/gob"
+	"encoding/binary"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
 )
@@ -31,13 +31,17 @@ type TxHasher struct{}
 // / from 32
 // to 32
 // nonce 8
-// whole tx struct will be hashed
+
+// hash sepcific fields that make the tx unique
 func (TxHasher) Hash(tx *Transaction) core_types.Hash {
 	buf := new(bytes.Buffer)
 
-	if err := gob.NewEncoder(buf).Encode(*tx); err != nil {
-		panic(err)
-	}
+	binary.Write(buf, binary.LittleEndian, tx.To)
+	binary.Write(buf, binary.LittleEndian, tx.From)
+	binary.Write(buf, binary.LittleEndian, tx.Data)
+	binary.Write(buf, binary.LittleEndian, tx.Nonce)
+	binary.Write(buf, binary.LittleEndian, tx.Value)
+
 	h := sha256.Sum256(buf.Bytes())
 	return core_types.Hash(h)
 }

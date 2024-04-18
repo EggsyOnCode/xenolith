@@ -20,7 +20,6 @@ const (
 	InstrDiv      Instruction = 0x1c
 )
 
-// the structure is FIFO not LIFO
 type Stack struct {
 	data []any
 	sp   int

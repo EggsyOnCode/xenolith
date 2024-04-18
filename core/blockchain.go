@@ -35,7 +35,7 @@ type Blockchain struct {
 
 // Constructor for Blckchain
 func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
-	//the responsbility of creating and maanging the account state falls on the blockchain
+	//the responsibility of creating and managing the account state falls on the blockchain
 	//read the accountState from Disk (TODO)
 	accountState := NewAccountState()
 
@@ -79,6 +79,8 @@ func (bc *Blockchain) SetValidator(v Validator) {
 // adding a new block to the chain
 func (bc *Blockchain) AddBlock(b *Block) error {
 	//validate block
+
+	fmt.Println("the len of tx in the block are : ", len(b.Transactions))
 
 	err := bc.Validator.ValidateBlock(b)
 	if err != nil {
@@ -167,41 +169,49 @@ func (bc *Blockchain) handleNativeNFT(tx *Transaction) error {
 	return nil
 }
 
+func (bc *Blockchain) handleTx(tx *Transaction) error {
+	bc.txStore[tx.Hash(&TxHasher{})] = tx
+
+	// execute the tx on the vm only if the data field is populated
+	if len(tx.Data) > 0 {
+		bc.logger.Log("msg", "executing code", "tx", tx.Hash(&TxHasher{}), "len of the data", len(tx.Data))
+		vm := NewVM(tx.Data, bc.contractState)
+		if err := vm.Run(); err != nil {
+			return err
+		}
+		// fmt.Printf("STATE : %+v\n", vm.contractState)
+		// result := vm.stack.Pop()
+		// fmt.Printf("VM : %+v\n", result)
+
+	}
+
+	//handling native NFT tokens
+	if tx.TxInner != nil {
+		if err := bc.handleNativeNFT(tx); err != nil {
+			return err
+		}
+	}
+
+	//otherwise handle the native token tx
+	if tx.Value > 0 {
+		if err := bc.handleTransferNativeTokens(tx); err != nil {
+			fmt.Printf("error while transferring tokens %v\n", err)
+			return err
+		}
+	}
+
+	return nil
+
+}
+
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	bc.stateLock.Lock()
 
 	//run the block data i.e the code on the VM
 	for _, tx := range b.Transactions {
-		bc.txStore[tx.Hash(&TxHasher{})] = tx
-
-		// execute the tx on the vm only if the data field is populated
-		if len(tx.Data) > 0 {
-			bc.logger.Log("msg", "executing code", "tx", tx.Hash(&TxHasher{}), "len of the data", len(tx.Data))
-			vm := NewVM(tx.Data, bc.contractState)
-			if err := vm.Run(); err != nil {
-				return err
-			}
-			// fmt.Printf("STATE : %+v\n", vm.contractState)
-			// result := vm.stack.Pop()
-			// fmt.Printf("VM : %+v\n", result)
-
+		if err:= bc.handleTx(tx); err != nil {
+			panic("error while handling tx")
 		}
-
-		//handling native NFT tokens
-		if tx.TxInner != nil {
-			if err := bc.handleNativeNFT(tx); err != nil {
-				return err
-			}
-		}
-
-		//otherwise handle the native token tx
-		if tx.Value > 0 {
-			if err := bc.handleTransferNativeTokens(tx); err != nil {
-				fmt.Printf("error while transferring tokens %v\n", err)
-				return err
-			}
-		}
-
 	}
 
 	bc.stateLock.Unlock()

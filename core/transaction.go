@@ -28,9 +28,9 @@ type Transaction struct {
 	//only used for native nft logic
 	TxInner any
 	//any arbitrary data for the VM
-	Data      []byte
-	From      crypto_lib.PublicKey
-	To        crypto_lib.PublicKey
+	Data []byte
+	From crypto_lib.PublicKey
+	To   crypto_lib.PublicKey
 	//value of the native token being transferred
 	Value     uint64
 	Signature *crypto_lib.Signature
@@ -58,7 +58,10 @@ func (t *Transaction) Hash(h Hasher[*Transaction]) core_types.Hash {
 }
 
 func (t *Transaction) Sign(priv *crypto_lib.PrivateKey) error {
-	sig, err := priv.Sign(t.Data)
+	// we sign the hash of the tx with our private key
+	hash := t.Hash(TxHasher{})
+
+	sig, err := priv.Sign(hash.ToSlice())
 	if err != nil {
 		return err
 	}
@@ -72,7 +75,10 @@ func (t *Transaction) Verify() (bool, error) {
 	if (t.Signature == nil) || (t.From == nil) {
 		return false, fmt.Errorf("Transaction not signed")
 	}
-	return t.Signature.Verify(t.Data, t.From), nil
+
+	//for verification we can't use the cached hash
+	hash := TxHasher{}.Hash(t)
+	return t.Signature.Verify(hash.ToSlice(), t.From), nil
 }
 
 //setters and getters for the timestamp

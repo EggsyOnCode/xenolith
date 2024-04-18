@@ -107,10 +107,12 @@ func (b *Block) Verify() error {
 	}
 
 	for _, tx := range b.Transactions {
-		if _, err := tx.Verify(); err != nil {
+		if ans, err := tx.Verify(); err != nil || !ans {
+			fmt.Printf("Error: %v\n", err)
 			return err
 		}
 	}
+
 	//also need to compare datahash of the slice of tx with the datahs of the proposed block
 	dataHash, _ := CalculateDataHash(b.Transactions)
 	if dataHash != b.Header.DataHash {
@@ -119,14 +121,14 @@ func (b *Block) Verify() error {
 	return nil
 }
 
-func (b *Block) AddTx(tx *Transaction) error{
-	ans, _ :=  tx.Verify()
-	if !ans{
+func (b *Block) AddTx(tx *Transaction) error {
+	ans, _ := tx.Verify()
+	if !ans {
 		return fmt.Errorf("Transaction not signed")
 	}
 	b.Transactions = append(b.Transactions, tx)
-	hash , err := CalculateDataHash(b.Transactions)
-	if err !=nil{
+	hash, err := CalculateDataHash(b.Transactions)
+	if err != nil {
 		fmt.Printf("Error calculating data hash: %v", err)
 		return err
 	}

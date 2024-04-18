@@ -46,7 +46,8 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 
 	//verifies the transactions in the block
 	for _, tx := range b.Transactions {
-		if ans, err := tx.Verify(); err != nil && !ans {
+		if ans, err := tx.Verify(); err != nil || !ans {
+			fmt.Printf("Error: %v\n", err)
 			return err
 		}
 	}
@@ -55,5 +56,6 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 	if err := b.Verify(); err != nil {
 		return err
 	}
+
 	return nil
 }
