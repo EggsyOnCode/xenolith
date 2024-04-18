@@ -42,8 +42,10 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 	priv := crypto_lib.GeneratePrivateKey()
 	block := &Block{
 		Header: header,
+		Validator: priv.PublicKey(),
 	}
 	tx := randomTxWithSignature(t)
+	fmt.Printf("validator is %v\n", block.Validator)
 	block.Transactions = append(block.Transactions, tx)
 	datahash, err := CalculateDataHash(block.Transactions)
 	assert.Nil(t, err)
@@ -86,10 +88,13 @@ func TestVerifyFail(t *testing.T) {
 	block := randomBlockWithSignature(t, 1, core_types.GenerateRandomHash(32))
 	err := block.Verify()
 	assert.Nil(t, err)
-	fmt.Println(block.Signature)
+	fmt.Printf("validator is before chaning %+v\n", block.Validator)
+
+	otherPrivKey := crypto_lib.GeneratePrivateKey()
+	block.Validator = otherPrivKey.PublicKey()
+	assert.NotNil(t, block.Verify())
 
 	//header info changing;
-	block.Header.DataHash = core_types.Hash{}
-	err1 := block.Verify()
-	assert.NotNil(t, err1)
+	block.Header.Height = 100
+	assert.NotNil(t, block.Verify())
 }

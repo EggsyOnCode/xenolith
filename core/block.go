@@ -102,6 +102,7 @@ func (b *Block) Verify() error {
 	if (b.Signature == nil) || (b.Validator == nil) {
 		return fmt.Errorf("Block not signed")
 	}
+	fmt.Printf("validator is before chaning %+v\n", b.Validator)
 	if !b.Signature.Verify(b.Header.Bytes(), b.Validator) {
 		return fmt.Errorf("invalid signature")
 	}
@@ -112,12 +113,13 @@ func (b *Block) Verify() error {
 		}
 	}
 
-	fmt.Printf("datahash is %v\n", b.Header.DataHash)
-	//also need to compare datahash of the slice of tx with the datahs of the proposed block
+	//also need to compare datahash of the slice of tx with the datahash of the proposed block
 	dataHash, _ := CalculateDataHash(b.Transactions)
 	if dataHash != b.Header.DataHash {
 		return fmt.Errorf("invalid data hash")
 	}
+
+
 	return nil
 }
 
