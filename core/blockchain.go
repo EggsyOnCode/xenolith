@@ -170,7 +170,6 @@ func (bc *Blockchain) handleNativeNFT(tx *Transaction) error {
 }
 
 func (bc *Blockchain) handleTx(tx *Transaction) error {
-	bc.txStore[tx.Hash(&TxHasher{})] = tx
 
 	// execute the tx on the vm only if the data field is populated
 	if len(tx.Data) > 0 {
@@ -209,9 +208,11 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 
 	//run the block data i.e the code on the VM
 	for _, tx := range b.Transactions {
-		if err:= bc.handleTx(tx); err != nil {
-			panic("error while handling tx")
+		if err := bc.handleTx(tx); err != nil {
+			fmt.Printf("error while handling tx %v\n", err)
+			continue
 		}
+		bc.txStore[tx.Hash(&TxHasher{})] = tx
 	}
 
 	bc.stateLock.Unlock()

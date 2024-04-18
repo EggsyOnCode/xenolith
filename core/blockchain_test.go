@@ -46,6 +46,41 @@ func TestSendNativeTokenTransferSuccess(t *testing.T) {
 	assert.Equal(t, bc.accountState.accounts[pkBob.PublicKey().Address()].Address, pkBob.PublicKey().Address())
 	assert.Equal(t, bc.accountState.accounts[addrAlice].Balance, uint64(50))
 }
+func TestSendNativeTransferInsufficientBalance(t *testing.T) {
+	bc := newBlockchainWithGenesis(t)
+	signer := crypto_lib.GeneratePrivateKey()
+
+	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))
+	assert.Nil(t, block.Sign(signer))
+
+	privKeyBob := crypto_lib.GeneratePrivateKey()
+	privKeyAlice := crypto_lib.GeneratePrivateKey()
+	amount := uint64(100)
+
+	accountBob := bc.accountState.CreateAccount(privKeyBob.PublicKey().Address())
+	accountBob.Balance = uint64(99)
+
+	tx := NewTransaction([]byte{})
+	tx.From = privKeyBob.PublicKey()
+	tx.To = privKeyAlice.PublicKey()
+	tx.Value = amount
+	tx.Sign(privKeyBob)
+
+	fmt.Printf("alice => %s\n", privKeyAlice.PublicKey().Address())
+	fmt.Printf("bob => %s\n", privKeyBob.PublicKey().Address())
+
+	block.AddTx(tx)
+	assert.Nil(t, bc.AddBlock(block))
+
+	_, err := bc.accountState.GetAccount(privKeyAlice.PublicKey().Address())
+	assert.NotNil(t, err)
+
+	// this erroneous tx should not be added to the blockchain
+	// therefore the query should return with an error
+	hash := tx.Hash(TxHasher{})
+	_, err = bc.GetTxByHash(hash)
+	assert.NotNil(t, err)
+}
 
 func TestSendNativeTokenTransferWithTampering(t *testing.T) {
 	bc := newBlockchainWithGenesis(t)
