@@ -27,3 +27,8 @@ func NewStatusMessage(v, c uint32) *StatusMessage {
 type BlocksMessage struct {
 	Blocks []*core.Block
 }
+
+type ValidatorNotification struct {
+	// PublicKey *crypto_lib.PublicKey
+	Server *Server
+}

@@ -80,8 +80,6 @@ func (bc *Blockchain) SetValidator(v Validator) {
 func (bc *Blockchain) AddBlock(b *Block) error {
 	//validate block
 
-	fmt.Println("the len of tx in the block are : ", len(b.Transactions))
-
 	err := bc.Validator.ValidateBlock(b)
 	if err != nil {
 		return err

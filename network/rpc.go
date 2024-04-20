@@ -24,12 +24,13 @@ func NewRPCMsg(from NetAddr, payload []byte) *RPC {
 type MessageType byte
 
 const (
-	MessageTypeTx        MessageType = 0x1
-	MessageTypeBlock     MessageType = 0x2
-	MessageTypeGetBlocks MessageType = 0x3
-	MessageStatusType    MessageType = 0x4
-	MessageGetStatusType MessageType = 0x5
-	MessageTypeBlocks    MessageType = 0x6
+	MessageTypeTx              MessageType = 0x1
+	MessageTypeBlock           MessageType = 0x2
+	MessageTypeGetBlocks       MessageType = 0x3
+	MessageStatusType          MessageType = 0x4
+	MessageGetStatusType       MessageType = 0x5
+	MessageTypeBlocks          MessageType = 0x6
+	MessageTypeValidatorInform MessageType = 0x7
 )
 
 type Message struct {
@@ -119,6 +120,16 @@ func DefaultRPCDecodeFunc(rpc RPC) (*DecodedMsg, error) {
 		return &DecodedMsg{
 			From: rpc.From,
 			Data: blocMsg,
+		}, nil
+	case MessageTypeValidatorInform:
+		validatorMsg := &ValidatorNotification{}
+		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(validatorMsg); err != nil {
+			return nil, err
+		}
+
+		return &DecodedMsg{
+			From: rpc.From,
+			Data: validatorMsg,
 		}, nil
 	case MessageGetStatusType:
 		return &DecodedMsg{

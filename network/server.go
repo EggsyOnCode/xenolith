@@ -43,7 +43,7 @@ type Server struct {
 	isValidator  bool
 	TCPTransport *TCPTransport
 	chain        *core.Blockchain
-	rpcCh        chan RPC
+	RpcCh        chan RPC
 	memPool      *TxPool
 	quitCh       chan struct{}
 	// we;ll be using this chan to receive tx from the json rpc server
@@ -74,7 +74,7 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		ServerOpts:   opts,
 		TCPTransport: tr,
 		peerCh:       peerCh,
-		rpcCh:        make(chan RPC),
+		RpcCh:        make(chan RPC),
 		mu:           &sync.RWMutex{},
 		peerMap:      make(map[NetAddr]*TCPPeer),
 		chain:        newChain,
@@ -127,7 +127,7 @@ free:
 			s.peerMap[NetAddr(peer.conn.RemoteAddr().String())] = peer
 			s.mu.RUnlock()
 
-			go peer.readLoop(s.rpcCh)
+			go peer.readLoop(s.RpcCh)
 
 			if err := s.sendGetStatusMsg(peer); err != nil {
 				s.Logger.Log("err", err)
@@ -136,16 +136,22 @@ free:
 
 			s.Logger.Log("msg", "peer added to the server", "peer", peer.conn.RemoteAddr(), "outgoing", peer.Outgoing)
 
-		case rpc := <-s.rpcCh:
+		case rpc := <-s.RpcCh:
 			msg, err := DefaultRPCDecodeFunc(rpc)
 			if err != nil {
 				s.Logger.Log("err", err)
 				continue
 			}
 
-			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
-				if err != core.ErrBlockKnown {
-					s.Logger.Log("err", err)
+			switch msg.Data.(type) {
+			// msg of type ValidatorNotification is to be handled inside the consensus layer
+			case ValidatorNotification:
+				continue
+			default:
+				if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
+					if err != core.ErrBlockKnown {
+						s.Logger.Log("err", err)
+					}
 				}
 			}
 
@@ -187,8 +193,26 @@ func (s *Server) bootstrapNodes() {
 			fmt.Printf("could not connect to %v: %v\n", addr, err)
 			continue
 		}
+		peer := NewTCPPeer(conn, true)
+		s.peerCh <- peer
 
-		s.peerCh <- NewTCPPeer(conn, true)
+		// if we are a validator then we inform the other nodes about this
+		if s.isValidator {
+			buf := &bytes.Buffer{}
+			validatorNotifMsg := &ValidatorNotification{
+				Server: s,
+			}
+			if err := gob.NewEncoder(buf).Encode(validatorNotifMsg); err != nil {
+				s.Logger.Log("msg", "error encoding validator notification msg", "err", err)
+			}
+			msg := NewMessage(MessageTypeValidatorInform, buf.Bytes())
+			buffer := &bytes.Buffer{}
+			if err := gob.NewEncoder(buffer).Encode(msg); err != nil {
+				s.Logger.Log("msg", "error encoding rpc msg fro validator notification msg", "err", err)
+			}
+
+			peer.Send(msg.Bytes())
+		}
 	}
 
 }
@@ -489,9 +513,9 @@ func readerToString(r io.Reader) string {
 
 func genesisBlock() *core.Block {
 	headers := &core.Header{
-		Version:   1,
-		Height:    0,
-		DataHash:  core_types.Hash{},
+		Version:  1,
+		Height:   0,
+		DataHash: core_types.Hash{},
 		//can't do time.Now cuz the hash of the genesisBlock will change
 		Timestamp: 0000,
 	}
@@ -512,4 +536,9 @@ func genesisBlock() *core.Block {
 	block.Sign(privK)
 
 	return block
+}
+
+func init() {
+	gob.Register(&Server{})
+	gob.Register(&ServerOpts{})
 }

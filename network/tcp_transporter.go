@@ -77,7 +77,9 @@ func (t *TCPTransport) acceptLoop() {
 			continue
 		}
 		peer := NewTCPPeer(conn, false)
-		t.peerCh <- peer
 
+		// accepting new peers
+
+		t.peerCh <- peer
 	}
 }
