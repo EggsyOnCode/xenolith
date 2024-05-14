@@ -30,6 +30,32 @@ func randomBlock(t *testing.T, height uint32, prevHash core_types.Hash) *Block {
 	return block
 }
 
+func randomBlockWithSignatureAndPrevBlock(t *testing.T, height uint32, prevHash core_types.Hash, b *Block) *Block {
+	header := &Header{
+		Version:       1,
+		Height:        height,
+		PrevBlockHash: prevHash,
+		Timestamp:     uint64(time.Now().UnixNano()),
+	}
+
+	//generating a private key
+	priv := crypto_lib.GeneratePrivateKey()
+	block := &Block{
+		Header:    header,
+		Validator: priv.PublicKey(),
+		PrevBlock: b,
+	}
+	tx := randomTxWithSignature(t)
+	fmt.Printf("validator is %v\n", block.Validator)
+	block.Transactions = append(block.Transactions, tx)
+	datahash, err := CalculateDataHash(block.Transactions)
+	assert.Nil(t, err)
+	block.Header.DataHash = datahash
+
+	assert.Nil(t, block.Sign(priv))
+	return block
+}
+
 func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.Hash) *Block {
 	header := &Header{
 		Version:       1,
@@ -41,8 +67,9 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 	//generating a private key
 	priv := crypto_lib.GeneratePrivateKey()
 	block := &Block{
-		Header: header,
+		Header:    header,
 		Validator: priv.PublicKey(),
+		PrevBlock: &Block{},
 	}
 	tx := randomTxWithSignature(t)
 	fmt.Printf("validator is %v\n", block.Validator)

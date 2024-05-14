@@ -17,6 +17,7 @@ type Header struct {
 	//version specifies the version of the header config; if the version changes, it has to updated here
 	Version uint32
 	//hash of all hte tx data
+	//i.e should be merkle root hash of all the tx in the block
 	DataHash      core_types.Hash
 	PrevBlockHash core_types.Hash
 	Height        uint32
@@ -42,7 +43,9 @@ type Block struct {
 	Validator crypto_lib.PublicKey
 	Signature *crypto_lib.Signature
 	//cached hash of the block (so that if someone reqs it we don;t have to hash it agin n again)
-	hash core_types.Hash
+	hash       core_types.Hash
+	NextBlocks []*Block
+	PrevBlock  *Block
 }
 
 func NewBlock(h *Header, txx []*Transaction) *Block {
@@ -118,7 +121,6 @@ func (b *Block) Verify() error {
 	if dataHash != b.Header.DataHash {
 		return fmt.Errorf("invalid data hash")
 	}
-
 
 	return nil
 }

@@ -13,10 +13,17 @@ type Blockchain struct {
 	Version uint32
 	logger  log.Logger
 
-	lock       sync.Mutex
-	headers    []*Header
-	blocks     []*Block
-	blockStore map[core_types.Hash]*Block
+	lock    sync.Mutex
+	headers []*Header
+	// blocks  []*Block
+
+	forkLock  *sync.RWMutex
+	forkCount uint32
+	core_types.ForkSlice
+	//since blochchain is a linked list of blocks, we just need to first genesis block and we can accses the rest of the link using it
+	block            *Block
+	blockStore       map[core_types.Hash]*Block
+	blockStoreHeight map[uint32]*Block
 	//TODO: add a diff mutex to make txSTore thread safe; currenlty both teh stores are usint he same mutex; which is bad!
 	txStore map[core_types.Hash]*Transaction
 	//TODO: impelment a better data structure to store the collection like merkle trees etc
@@ -45,18 +52,23 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 	accountState.CreateAccount(coinbase.Address())
 
 	bc := &Blockchain{
-		contractState:   NewState(),
-		headers:         []*Header{},
-		store:           NewMemoryStore(),
-		logger:          logger,
-		Version:         1,
-		blocks:          make([]*Block, 1),
-		blockStore:      make(map[core_types.Hash]*Block),
-		txStore:         make(map[core_types.Hash]*Transaction),
-		collectionStore: make(map[core_types.Hash]*CollectionTx),
-		mintStore:       make(map[core_types.Hash]*MintTx),
-		accountState:    accountState,
-		stateLock:       sync.RWMutex{},
+		contractState: NewState(),
+		headers:       []*Header{},
+		store:         NewMemoryStore(),
+		logger:        logger,
+		Version:       1,
+		// blocks:           make([]*Block, 1),
+		block:            genesis,
+		ForkSlice:        make(core_types.ForkSlice),
+		forkLock:         &sync.RWMutex{},
+		forkCount:        0,
+		blockStore:       make(map[core_types.Hash]*Block),
+		blockStoreHeight: make(map[uint32]*Block),
+		txStore:          make(map[core_types.Hash]*Transaction),
+		collectionStore:  make(map[core_types.Hash]*CollectionTx),
+		mintStore:        make(map[core_types.Hash]*MintTx),
+		accountState:     accountState,
+		stateLock:        sync.RWMutex{},
 	}
 
 	bc.Validator = NewBlockValidator(bc)
@@ -84,6 +96,7 @@ func (bc *Blockchain) AddBlock(b *Block) error {
 	if err != nil {
 		return err
 	}
+
 	return bc.addBlockWithoutValidation(b)
 
 }
@@ -115,7 +128,7 @@ func (bc *Blockchain) GetBlock(height uint32) (*Block, error) {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
 	//when adding the first block with height 1 , the height of the blockchain is 0 therefore we can't access bc.headers[1]
-	return bc.blocks[height+1], nil
+	return bc.blockStoreHeight[height+1], nil
 
 }
 func (bc *Blockchain) GetHeaders(height uint32) (*Header, error) {
@@ -201,6 +214,52 @@ func (bc *Blockchain) handleTx(tx *Transaction) error {
 
 }
 
+// checks to see if the new incoming block is causing any forks in the chain
+// or is attaching itself to a particular forked block etc
+func (bc *Blockchain) handleAndTrackForks(b *Block) (bool, error) {
+	// 1st check: if the block is causing a fork --> insertion in forkSlice
+	// false indicates that the block is not causing a fork or becoming part of a fork
+	if len(b.PrevBlock.NextBlocks) >= 1 {
+		forkingFork := &core_types.Fork{
+			ChainTip:      b.Hash(BlockHasher{}),
+			ForkingBlock:  b.PrevBlock.Hash(BlockHasher{}),
+			Confirmations: 0,
+		}
+
+		competitorFork := &core_types.Fork{
+			ChainTip:      b.PrevBlock.NextBlocks[0].Hash(BlockHasher{}),
+			ForkingBlock:  b.PrevBlock.Hash(BlockHasher{}),
+			Confirmations: 0,
+		}
+
+		forks := []*core_types.Fork{forkingFork, competitorFork}
+
+		bc.forkLock.Lock()
+		bc.forkCount++
+		bc.ForkSlice[bc.forkCount] = forks
+		bc.forkLock.Unlock()
+
+		return true, nil
+	}
+	// 2nd check: if the block is attaching itself to a forked block (a block in a fork chain temp or otherwise)--> update the forkSlice
+
+	fork, err := bc.ForkSlice.FindBlock(b.Header.PrevBlockHash)
+	if err != nil {
+		return false, err
+	}
+
+	fork.Confirmations++
+	blockAtForkTip, err := bc.GetBlockByHash(fork.ChainTip)
+	if err != nil {
+		return true, err
+	}
+
+	blockAtForkTip.NextBlocks = append(blockAtForkTip.NextBlocks, b)
+	fork.ChainTip = b.Hash(BlockHasher{})
+
+	return true, nil
+}
+
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	bc.stateLock.Lock()
 
@@ -221,9 +280,23 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 
 	bc.lock.Lock()
 	bc.headers = append(bc.headers, b.Header)
-	bc.blocks = append(bc.blocks, b)
+	// bc.block itself is the head ptr
+	// adding the new block to the next block of the current block
+
+	isFork := true
+	//handle forks if present
+	if b.Header.Height > 1 {
+		isFork, _ = bc.handleAndTrackForks(b)
+	}
+	// if the block is not a fork then we can add the block normally to the ll
+	if !isFork {
+		bc.block.NextBlocks = append(bc.block.NextBlocks, b)
+		bc.block = b
+	}
+
 	//adding block to the blockStore
 	bc.blockStore[b.Hash(BlockHasher{})] = b
+	bc.blockStoreHeight[b.Header.Height+1] = b
 	bc.lock.Unlock()
 
 	bc.store.Put(b)

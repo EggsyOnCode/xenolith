@@ -40,7 +40,10 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 
 	//the previous block hash of the proposed block should be equal to the hash of the last block in the blockchain
 	hash := BlockHasher{}.Hash(prevHash)
-	if hash != b.Header.PrevBlockHash {
+	hashOfHeaderBlock := v.bc.block.Hash(BlockHasher{})
+	// reason for dual assertion is that; in a forking scenario 
+	// the block headers and the blockchain linked list could go out of sync
+	if hash != b.Header.PrevBlockHash && hashOfHeaderBlock != b.Header.PrevBlockHash {
 		return fmt.Errorf("Block with height %v and hash %v has a different previous block hash %v", b.Header.Height, b.Hash(BlockHasher{}), b.Header.PrevBlockHash)
 	}
 

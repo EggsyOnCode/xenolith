@@ -188,12 +188,32 @@ func TestGetBlock(t *testing.T) {
 	}
 }
 
+func TestForkBlockAddition(t *testing.T) {
+	gB, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
+	fmt.Print(bc)
+	prevHash := getPrevBlockHash(t, bc, uint32(1))
+	block := randomBlockWithSignature(t, uint32(1), (prevHash))
+	err := bc.AddBlock(block)
+	assert.Nil(t, err)
+	forkingBlock := randomBlockWithSignatureAndPrevBlock(t, uint32(2), (prevHash), gB)
+	err1 := bc.AddBlock(forkingBlock)
+	assert.Nil(t, err1)
+}
+
 func newBlockchainWithGenesis(t *testing.T) *Blockchain {
 	block := randomBlockWithSignature(t, 1, core_types.Hash{})
 	logger := log.NewLogfmtLogger(os.Stderr)
 	bc, err := NewBlockchain(block, logger)
 	assert.Nil(t, err)
 	return bc
+}
+
+func newBlockchainWithGenesisAndReturnsGenesis(t *testing.T) (*Block, *Blockchain) {
+	block := randomBlockWithSignature(t, 1, core_types.Hash{})
+	logger := log.NewLogfmtLogger(os.Stderr)
+	bc, err := NewBlockchain(block, logger)
+	assert.Nil(t, err)
+	return block, bc
 }
 
 func getPrevBlockHash(t *testing.T, bc *Blockchain, height uint32) core_types.Hash {

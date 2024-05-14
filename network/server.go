@@ -9,7 +9,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
 	"github.com/EggsyOnCode/xenolith/api"
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/core_types"

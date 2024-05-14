@@ -4,7 +4,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/network"
 	"github.com/go-kit/log"
@@ -21,8 +20,8 @@ type Committee struct {
 }
 
 type ConsensusClientOpts struct {
-	BlockTime    time.Time
-	EpochTime    time.Time
+	BlockTime    time.Duration
+	EpochTime    time.Duration
 	Logger       log.Logger
 	RPCProcessor network.RPCProcessor
 	// TCPTransport *network.TCPTransport
