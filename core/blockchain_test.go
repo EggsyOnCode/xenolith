@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"testing"
 
@@ -174,6 +175,16 @@ func TestGetHeaders(t *testing.T) {
 
 }
 
+func TestDiffToTargetFunc(t *testing.T) {
+	compact := uint32(0x1b0404cb)
+	ans := compactToTarget((compact))
+	expectedAns, _ := new(big.Int).SetString("00000000000404CB000000000000000000000000000000000000000000000000", 16)
+	fmt.Printf("expectedTarget is %x\n", expectedAns)
+	assert.Equal(t, 0, ans.Cmp(expectedAns), "Expected target does not match")
+	comp := targetToCompact(ans)
+	assert.Equal(t, comp, compact)
+}
+
 func TestGetBlock(t *testing.T) {
 	bc := newBlockchainWithGenesis(t)
 	lenB := 10
@@ -202,7 +213,7 @@ func TestForkBlockAddition(t *testing.T) {
 
 func TestTargetValueForBlock(t *testing.T) {
 	bc := newBlockchainWithGenesis(t)
-	lenB := HEIGHT_DIVISOR*2 + 1
+	lenB := HEIGHT_DIVISOR + 1
 	for i := 1; i < lenB; i++ {
 		prevHash := getPrevBlockHash(t, bc, uint32(i))
 		block := randomBlockWithSignature(t, uint32(i), (prevHash))
@@ -213,12 +224,12 @@ func TestTargetValueForBlock(t *testing.T) {
 		assert.Equal(t, block, block1)
 	}
 
-	prevBlock, err := bc.GetBlock(HEIGHT_DIVISOR * 2)
+	prevBlock, err := bc.GetBlock(HEIGHT_DIVISOR)
 	assert.Nil(t, err)
 	block := randomBlockWithSignature(t, uint32(6), prevBlock.Hash(BlockHasher{}))
 	expectedTarget, err := bc.calcTargetValue(block)
 	assert.Nil(t, err)
-	fmt.Printf("%v\n", block.Header.Difficulty)
+	fmt.Printf("Difficulty : %v\n", block.Header.nBits)
 	assert.Less(t, expectedTarget, 1)
 }
 

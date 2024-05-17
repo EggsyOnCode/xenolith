@@ -1,8 +1,8 @@
 package core
 
 import (
+	"encoding/binary"
 	"fmt"
-	"math"
 	"math/big"
 	"sync"
 
@@ -360,72 +360,57 @@ func (bc *Blockchain) calcTargetValue(b *Block) (string, error) {
 		}
 		// gives us time Diff in sec
 		timeDiff := (tsCurrentBlock.Header.Timestamp - tsCompBlock)
-		// diff of the next block (the to-be-processed block)
-		next_diff := tsCurrentBlock.Header.Difficulty * AVG_TARGET_TIME / float64(timeDiff)
-		rounded_next_diff := math.Round(next_diff)
-		diff_hash := fmt.Sprintf("%x", math.Float64bits(rounded_next_diff))
-		tar, tar_compact := getTargetFromDiff(diff_hash, fmt.Sprintf("%f", tsCurrentBlock.Header.Difficulty))
-		fmt.Printf("Target : %s\nTarget Compact : %s\n", tar, tar_compact)
-		b.Header.Target, _ = new(big.Int).SetString(tar, 16)
-		b.Header.Difficulty = next_diff
-		return tar, nil
+		fmt.Print(timeDiff)
+		return "", nil
 	}
 
 	return "", nil
 }
-func getTargetFromDiff(diff string, currentDiff string) (string, string) {
-	// Extract exponent and mantissa from the compact format
-	exponentHex, mantissaHex := extractExpoAndMantissaFromHex(diff)
+func compactToTarget(compact uint32) *big.Int {
+	// Extract mantissa and exponent
+	mantissa := compact & 0x007fffff
+	exponent := uint(compact >> 24)
 
-	// Convert exponent to a big integer and adjust it
-	exponent := new(big.Int)
-	exponent.SetString(exponentHex, 16)
-	exponent.Sub(exponent, big.NewInt(3))
+	// Calculate the coefficient (first 3 bytes of mantissa)
+	coefficient := mantissa & 0xffffff
 
-	// Convert mantissa to a big integer
-	mantissa := new(big.Int)
-	mantissa.SetString(mantissaHex, 16)
+	// Calculate the target value
+	target := new(big.Int).SetUint64(uint64(coefficient))
+	target.Lsh(target, uint(8*(exponent-3)))
 
-	// Calculate the target: mantissa * (256 ^ exponent)
-	base := big.NewInt(256)
-	exp := new(big.Int).Exp(base, exponent, nil)
-	hTarget := new(big.Int).Mul(mantissa, exp)
+	fmt.Printf("target is %x\n", target)
 
-	// Convert current difficulty to big.Float
-	difficulty := new(big.Float)
-	difficulty.SetString(currentDiff)
-
-	// Calculate current target: hTarget / difficulty
-	hTargetFloat := new(big.Float).SetInt(hTarget)
-	cTargetFloat := new(big.Float).Quo(hTargetFloat, difficulty)
-
-	// Convert cTargetFloat to big.Int and round up
-	cTarget := new(big.Int)
-	cTargetFloat.Add(cTargetFloat, big.NewFloat(0.999999999)).Int(cTarget)
-
-	// Convert current target to hex
-	targetHex := cTarget.Text(16)
-
-	// Convert current target to compact format
-	mantissaCompact := targetHex
-	if len(targetHex) > 6 {
-		mantissaCompact = targetHex[:6]
-	}
-	exponentCompact := fmt.Sprintf("%02x", len(targetHex)/2+3)
-	targetCompact := exponentCompact + mantissaCompact
-
-	return targetHex, targetCompact
+	return target
 }
 
-func extractExpoAndMantissaFromHex(h string) (string, string) {
-	if len(h) < 2 {
-		fmt.Errorf("Invalid hex string")
-		return "", ""
+func targetToCompact(target *big.Int) uint32 {
+	// Convert target to bytes
+	targetBytes := target.Bytes()
+
+	// Check if the first byte of targetBytes is greater than 0x7f
+	prependZero := false
+	if len(targetBytes) > 0 && targetBytes[0] > 0x7f {
+		prependZero = true
 	}
 
-	// Extract the first byte (exponent) and remaining bytes (mantissa)
-	firstByteHex := h[:2]
-	remainingBytesHex := h[2:]
+	// Prepend a zero byte if necessary
+	if prependZero {
+		targetBytes = append([]byte{0}, targetBytes...)
+	}
 
-	return firstByteHex, remainingBytesHex
+	// Prepend the length of the byte slice
+	targetBytes = append([]byte{byte(len(targetBytes))}, targetBytes...)
+
+	// Right-pad with zeros if there are less than 4 bytes
+	for len(targetBytes) < 4 {
+		targetBytes = append(targetBytes, 0)
+	}
+
+	// Only keep 2 bytes of precision
+	targetBytes = targetBytes[:4]
+
+	// Convert the byte slice to uint32
+	bits := binary.BigEndian.Uint32(targetBytes)
+
+	return bits
 }
