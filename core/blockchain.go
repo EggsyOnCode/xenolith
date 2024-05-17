@@ -340,6 +340,7 @@ func (bc *Blockchain) SetLogger(l log.Logger) {
 	bc.logger = l
 }
 
+// calculates the target and nBits value for the next block
 func (bc *Blockchain) calcTargetValue(b *Block) (string, error) {
 	currentHeight := bc.Height()
 	if currentHeight%HEIGHT_DIVISOR == 0 {
@@ -360,8 +361,15 @@ func (bc *Blockchain) calcTargetValue(b *Block) (string, error) {
 		}
 		// gives us time Diff in sec
 		timeDiff := (tsCurrentBlock.Header.Timestamp - tsCompBlock)
-		fmt.Print(timeDiff)
-		return "", nil
+		new_target := compactToTarget(tsCurrentBlock.Header.nBits)
+		timeBigInt := new(big.Int).SetUint64(timeDiff)
+		actualTimeDiffBigInt := new(big.Int).SetUint64(AVG_TARGET_TIME)
+		new_target.Mul(new_target, timeBigInt)
+		new_target.Div(new_target, actualTimeDiffBigInt)
+
+		b.Header.nBits = targetToCompact(new_target)
+		fmt.Printf("target %064x \n nBit are %v\n", new_target, b.Header.nBits)
+		return new_target.String(), nil
 	}
 
 	return "", nil
@@ -378,7 +386,6 @@ func compactToTarget(compact uint32) *big.Int {
 	target := new(big.Int).SetUint64(uint64(coefficient))
 	target.Lsh(target, uint(8*(exponent-3)))
 
-	fmt.Printf("target is %x\n", target)
 
 	return target
 }
