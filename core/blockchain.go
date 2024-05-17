@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
@@ -12,6 +13,7 @@ import (
 )
 
 const (
+	//target readjusted after this number
 	HEIGHT_DIVISOR = 5
 	// 60 sec
 	AVG_TARGET_TIME = 1 * 60
@@ -47,6 +49,7 @@ type Blockchain struct {
 	//to store the state of all the smart contracts on the blockchain
 	//TODO implement an interface for the State
 	contractState *State
+	target        *big.Int
 }
 
 // Constructor for Blckchain
@@ -320,11 +323,6 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	return bc.store.Put(b)
 }
 
-func (bc *Blockchain) mineBlock(b *Block) error {
-	b.Hash(BlockHasher{})
-	return nil
-}
-
 func (bc *Blockchain) handleTransferNativeTokens(tx *Transaction) error {
 	bc.logger.Log("msg", "trasnfering native tokens between addresses", "from", tx.From, "to", tx.To, "value", tx.Value)
 
@@ -340,8 +338,12 @@ func (bc *Blockchain) SetLogger(l log.Logger) {
 	bc.logger = l
 }
 
+func isLowerThanTarget(x *big.Int, y *big.Int) int {
+	return x.Cmp(y)
+}
+
 // calculates the target and nBits value for the next block
-func (bc *Blockchain) calcTargetValue(b *Block) (string, error) {
+func (bc *Blockchain) calcTargetValue(b *Block) (*big.Int, error) {
 	currentHeight := bc.Height()
 	if currentHeight%HEIGHT_DIVISOR == 0 {
 		var comparisonBlock *Block
@@ -352,12 +354,12 @@ func (bc *Blockchain) calcTargetValue(b *Block) (string, error) {
 			comparisonBlock, err = bc.GetBlock(currentHeight - HEIGHT_DIVISOR)
 		}
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		tsCompBlock := comparisonBlock.Header.Timestamp
 		tsCurrentBlock, err1 := bc.GetBlock(currentHeight)
 		if err1 != nil {
-			return "", err1
+			return nil, err1
 		}
 		// gives us time Diff in sec
 		timeDiff := (tsCurrentBlock.Header.Timestamp - tsCompBlock)
@@ -369,11 +371,13 @@ func (bc *Blockchain) calcTargetValue(b *Block) (string, error) {
 
 		b.Header.nBits = targetToCompact(new_target)
 		fmt.Printf("target %064x \n nBit are %v\n", new_target, b.Header.nBits)
-		return new_target.String(), nil
+		bc.target = new_target
+		return new_target, nil
 	}
 
-	return "", nil
+	return nil, nil
 }
+
 func compactToTarget(compact uint32) *big.Int {
 	// Extract mantissa and exponent
 	mantissa := compact & 0x007fffff
@@ -385,7 +389,6 @@ func compactToTarget(compact uint32) *big.Int {
 	// Calculate the target value
 	target := new(big.Int).SetUint64(uint64(coefficient))
 	target.Lsh(target, uint(8*(exponent-3)))
-
 
 	return target
 }
@@ -420,4 +423,34 @@ func targetToCompact(target *big.Int) uint32 {
 	bits := binary.BigEndian.Uint32(targetBytes)
 
 	return bits
+}
+
+func (bc *Blockchain) MineBlock(b *Block) error {
+	var targetForBlock *big.Int
+	var err error
+	if (bc.Height() % HEIGHT_DIVISOR) == 0 {
+		targetForBlock, err = bc.calcTargetValue(b)
+		if err != nil {
+			return err
+		}
+	}
+	targetForBlock = bc.target
+	bHash := b.HashWithoutCache(BlockHasher{})
+	hashBigInt, _ := new(big.Int).SetString(bHash.String(), 16)
+	for isLowerThanTarget(hashBigInt, targetForBlock) != -1 {
+		nonce := b.Header.Nonce
+		b.Header.Nonce++
+		bHash = b.HashWithoutCache(BlockHasher{})
+		hashBigInt.SetString(bHash.String(), 16)
+		fmt.Printf("trying new combo with nonce %v block hash %s and target %x \n", nonce, bHash.String(), targetForBlock)
+	}
+
+	// updating timestamp
+	b.Header.Timestamp = uint64(time.Now().UnixNano())
+	b.Header.Target = targetForBlock
+	b.Header.nBits = targetToCompact(targetForBlock)
+
+	fmt.Printf("block mined with hash %s and target %x \n", bHash.String(), targetForBlock)
+
+	return nil
 }

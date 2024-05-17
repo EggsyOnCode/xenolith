@@ -233,6 +233,26 @@ func TestTargetValueForBlock(t *testing.T) {
 	assert.NotEmpty(t, expectedTarget)
 }
 
+func TestMineBlockFunc(t *testing.T){
+	bc := newBlockchainWithGenesis(t)
+	lenB := HEIGHT_DIVISOR*2 + 1
+	for i := 1; i < lenB; i++ {
+		prevHash := getPrevBlockHash(t, bc, uint32(i))
+		block := randomBlockWithSignature(t, uint32(i), (prevHash))
+		err := bc.AddBlock(block)
+		assert.Nil(t, err)
+		block1, err1 := bc.GetBlock(block.Header.Height)
+		assert.Nil(t, err1)
+		assert.Equal(t, block, block1)
+	}
+
+	prevBlock, err := bc.GetBlock(HEIGHT_DIVISOR * 2)
+	assert.Nil(t, err)
+	block := randomBlockWithSignature(t, uint32(6), prevBlock.Hash(BlockHasher{}))
+	err1 := bc.MineBlock(block)
+	assert.Nil(t, err1)
+}
+
 func newBlockchainWithGenesis(t *testing.T) *Blockchain {
 	block := genesisBlockWithSig(t, 1, core_types.Hash{})
 	logger := log.NewLogfmtLogger(os.Stderr)

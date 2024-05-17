@@ -62,7 +62,7 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 		Height:        height,
 		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
-		nBits:    0x1d00ffff,
+		nBits:         0x1d00ffff,
 	}
 
 	header.Target = compactToTarget(header.nBits)
@@ -90,7 +90,7 @@ func genesisBlockWithSig(t *testing.T, height uint32, prevHash core_types.Hash) 
 		Height:        height,
 		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
-		nBits:    0x1d00ffff,
+		nBits:         0x1d00ffff,
 	}
 
 	header.Target = compactToTarget(header.nBits)
@@ -160,4 +160,15 @@ func TestVerifyFail(t *testing.T) {
 	//header info changing;
 	block.Header.Height = 100
 	assert.NotNil(t, block.Verify())
+}
+
+func TestHashFunc(t *testing.T) {
+	block := randomBlockWithSignature(t, 1, core_types.GenerateRandomHash(32))
+	hash := block.HashWithoutCache(BlockHasher{})
+	fmt.Println(hash)
+
+	block.Header.Nonce++
+	hash2 := block.HashWithoutCache(BlockHasher{})
+	fmt.Println(hash2)
+	assert.NotEqual(t, hash, hash2)
 }
