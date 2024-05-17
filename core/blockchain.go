@@ -2,11 +2,20 @@ package core
 
 import (
 	"fmt"
+	"math"
+	"math/big"
 	"sync"
 
 	"github.com/EggsyOnCode/xenolith/core_types"
 	"github.com/EggsyOnCode/xenolith/crypto_lib"
 	"github.com/go-kit/log"
+)
+
+const (
+	HEIGHT_DIVISOR = 5
+	// 60 sec
+	AVG_TARGET_TIME = 1 * 60
+	TARGET_GENESIS  = 0x00ffff0000000000000000000000000000000000000000000000000000
 )
 
 type Blockchain struct {
@@ -311,6 +320,11 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	return bc.store.Put(b)
 }
 
+func (bc *Blockchain) mineBlock(b *Block) error {
+	b.Hash(BlockHasher{})
+	return nil
+}
+
 func (bc *Blockchain) handleTransferNativeTokens(tx *Transaction) error {
 	bc.logger.Log("msg", "trasnfering native tokens between addresses", "from", tx.From, "to", tx.To, "value", tx.Value)
 
@@ -324,4 +338,94 @@ func (bc *Blockchain) HasBlock(height uint32) bool {
 
 func (bc *Blockchain) SetLogger(l log.Logger) {
 	bc.logger = l
+}
+
+func (bc *Blockchain) calcTargetValue(b *Block) (string, error) {
+	currentHeight := bc.Height()
+	if currentHeight%HEIGHT_DIVISOR == 0 {
+		var comparisonBlock *Block
+		var err error
+		if (currentHeight - HEIGHT_DIVISOR) == 0 {
+			comparisonBlock, err = bc.GetBlock(1)
+		} else {
+			comparisonBlock, err = bc.GetBlock(currentHeight - HEIGHT_DIVISOR)
+		}
+		if err != nil {
+			return "", err
+		}
+		tsCompBlock := comparisonBlock.Header.Timestamp
+		tsCurrentBlock, err1 := bc.GetBlock(currentHeight)
+		if err1 != nil {
+			return "", err1
+		}
+		// gives us time Diff in sec
+		timeDiff := (tsCurrentBlock.Header.Timestamp - tsCompBlock)
+		// diff of the next block (the to-be-processed block)
+		next_diff := tsCurrentBlock.Header.Difficulty * AVG_TARGET_TIME / float64(timeDiff)
+		rounded_next_diff := math.Round(next_diff)
+		diff_hash := fmt.Sprintf("%x", math.Float64bits(rounded_next_diff))
+		tar, tar_compact := getTargetFromDiff(diff_hash, fmt.Sprintf("%f", tsCurrentBlock.Header.Difficulty))
+		fmt.Printf("Target : %s\nTarget Compact : %s\n", tar, tar_compact)
+		b.Header.Target, _ = new(big.Int).SetString(tar, 16)
+		b.Header.Difficulty = next_diff
+		return tar, nil
+	}
+
+	return "", nil
+}
+func getTargetFromDiff(diff string, currentDiff string) (string, string) {
+	// Extract exponent and mantissa from the compact format
+	exponentHex, mantissaHex := extractExpoAndMantissaFromHex(diff)
+
+	// Convert exponent to a big integer and adjust it
+	exponent := new(big.Int)
+	exponent.SetString(exponentHex, 16)
+	exponent.Sub(exponent, big.NewInt(3))
+
+	// Convert mantissa to a big integer
+	mantissa := new(big.Int)
+	mantissa.SetString(mantissaHex, 16)
+
+	// Calculate the target: mantissa * (256 ^ exponent)
+	base := big.NewInt(256)
+	exp := new(big.Int).Exp(base, exponent, nil)
+	hTarget := new(big.Int).Mul(mantissa, exp)
+
+	// Convert current difficulty to big.Float
+	difficulty := new(big.Float)
+	difficulty.SetString(currentDiff)
+
+	// Calculate current target: hTarget / difficulty
+	hTargetFloat := new(big.Float).SetInt(hTarget)
+	cTargetFloat := new(big.Float).Quo(hTargetFloat, difficulty)
+
+	// Convert cTargetFloat to big.Int and round up
+	cTarget := new(big.Int)
+	cTargetFloat.Add(cTargetFloat, big.NewFloat(0.999999999)).Int(cTarget)
+
+	// Convert current target to hex
+	targetHex := cTarget.Text(16)
+
+	// Convert current target to compact format
+	mantissaCompact := targetHex
+	if len(targetHex) > 6 {
+		mantissaCompact = targetHex[:6]
+	}
+	exponentCompact := fmt.Sprintf("%02x", len(targetHex)/2+3)
+	targetCompact := exponentCompact + mantissaCompact
+
+	return targetHex, targetCompact
+}
+
+func extractExpoAndMantissaFromHex(h string) (string, string) {
+	if len(h) < 2 {
+		fmt.Errorf("Invalid hex string")
+		return "", ""
+	}
+
+	// Extract the first byte (exponent) and remaining bytes (mantissa)
+	firstByteHex := h[:2]
+	remainingBytesHex := h[2:]
+
+	return firstByteHex, remainingBytesHex
 }

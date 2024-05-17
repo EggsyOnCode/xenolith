@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -62,6 +63,45 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 		Height:        height,
 		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
+		Difficulty:    29829733124.04041574884510759883,
+	}
+
+	header.Target = new(big.Int)
+	_, ok := header.Target.SetString("0x00ffff0000000000000000000000000000000000000000000000000000", 16)
+	if !ok {
+		fmt.Errorf("error setting target")
+	}
+	//generating a private key
+	priv := crypto_lib.GeneratePrivateKey()
+	block := &Block{
+		Header:    header,
+		Validator: priv.PublicKey(),
+		PrevBlock: &Block{},
+	}
+	tx := randomTxWithSignature(t)
+	fmt.Printf("validator is %v\n", block.Validator)
+	block.Transactions = append(block.Transactions, tx)
+	datahash, err := CalculateDataHash(block.Transactions)
+	assert.Nil(t, err)
+	block.Header.DataHash = datahash
+
+	assert.Nil(t, block.Sign(priv))
+	return block
+}
+
+func genesisBlockWithSig(t *testing.T, height uint32, prevHash core_types.Hash) *Block {
+	header := &Header{
+		Version:       1,
+		Height:        height,
+		PrevBlockHash: prevHash,
+		Timestamp:     uint64(time.Now().UnixNano()),
+		Difficulty:    29829733124.04041574884510759883,
+	}
+
+	header.Target = new(big.Int)
+	_, ok := header.Target.SetString("0x00ffff0000000000000000000000000000000000000000000000000000", 16)
+	if !ok {
+		fmt.Errorf("error setting target")
 	}
 
 	//generating a private key

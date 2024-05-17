@@ -200,8 +200,30 @@ func TestForkBlockAddition(t *testing.T) {
 	assert.Nil(t, err1)
 }
 
+func TestTargetValueForBlock(t *testing.T) {
+	bc := newBlockchainWithGenesis(t)
+	lenB := HEIGHT_DIVISOR*2 + 1
+	for i := 1; i < lenB; i++ {
+		prevHash := getPrevBlockHash(t, bc, uint32(i))
+		block := randomBlockWithSignature(t, uint32(i), (prevHash))
+		err := bc.AddBlock(block)
+		assert.Nil(t, err)
+		block1, err1 := bc.GetBlock(block.Header.Height)
+		assert.Nil(t, err1)
+		assert.Equal(t, block, block1)
+	}
+
+	prevBlock, err := bc.GetBlock(HEIGHT_DIVISOR * 2)
+	assert.Nil(t, err)
+	block := randomBlockWithSignature(t, uint32(6), prevBlock.Hash(BlockHasher{}))
+	expectedTarget, err := bc.calcTargetValue(block)
+	assert.Nil(t, err)
+	fmt.Printf("%v\n", block.Header.Difficulty)
+	assert.Less(t, expectedTarget, 1)
+}
+
 func newBlockchainWithGenesis(t *testing.T) *Blockchain {
-	block := randomBlockWithSignature(t, 1, core_types.Hash{})
+	block := genesisBlockWithSig(t, 1, core_types.Hash{})
 	logger := log.NewLogfmtLogger(os.Stderr)
 	bc, err := NewBlockchain(block, logger)
 	assert.Nil(t, err)
@@ -209,7 +231,7 @@ func newBlockchainWithGenesis(t *testing.T) *Blockchain {
 }
 
 func newBlockchainWithGenesisAndReturnsGenesis(t *testing.T) (*Block, *Blockchain) {
-	block := randomBlockWithSignature(t, 1, core_types.Hash{})
+	block := genesisBlockWithSig(t, 1, core_types.Hash{})
 	logger := log.NewLogfmtLogger(os.Stderr)
 	bc, err := NewBlockchain(block, logger)
 	assert.Nil(t, err)
@@ -224,7 +246,7 @@ func getPrevBlockHash(t *testing.T, bc *Blockchain, height uint32) core_types.Ha
 
 // func TestGetGenesisBlock(t *testing.T) {
 // 	bc := newBlockchainWithGenesis(t)
-// 	block, err := bc.GetBlock(0)
+// 	block, err := bc.GetBlock(1)
 // 	assert.Nil(t, err)
 // 	assert.Equal(t, block.Header.Height, uint32(1))
 // }
