@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 	"time"
+
 	"github.com/EggsyOnCode/xenolith/api"
 	"github.com/EggsyOnCode/xenolith/core"
 	"github.com/EggsyOnCode/xenolith/core_types"
@@ -83,6 +84,8 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		txCh:         make(chan *core.Transaction),
 	}
 
+	newChain.SetTxChan(s.txCh)
+
 	// only if the api listen addr port has been specified
 	if len(opts.APIListenAddr) > 0 {
 		cfg := api.ServerConfig{
@@ -131,7 +134,7 @@ free:
 			if err := s.sendGetStatusMsg(peer); err != nil {
 				s.Logger.Log("err", err)
 				continue
-			}
+		}
 
 			s.Logger.Log("msg", "peer added to the server", "peer", peer.conn.RemoteAddr(), "outgoing", peer.Outgoing)
 

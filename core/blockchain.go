@@ -59,6 +59,8 @@ type Blockchain struct {
 	//TODO implement an interface for the State
 	contractState *State
 	target        *big.Int
+	// a channel shared between blockchain and server for sharing orphaned Tx into server's mempool
+	txCh chan *Transaction
 }
 
 // Constructor for Blckchain
@@ -108,6 +110,11 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 // A dynamic setter for Validator
 func (bc *Blockchain) SetValidator(v Validator) {
 	bc.Validator = v
+}
+
+// A dynamic setter for txChan
+func (bc *Blockchain) SetTxChan(t chan *Transaction) {
+	bc.txCh = t
 }
 
 // adding a new block to the chain
@@ -236,6 +243,68 @@ func (bc *Blockchain) handleTx(tx *Transaction) error {
 
 }
 
+func (bc *Blockchain) revertTx(tx *Transaction) error {
+	if err := tx.Revert(); err != nil {
+		return err
+	}
+	return bc.handleTx(tx)
+}
+
+// / @dev : this internal func gets executed during a chain reorg; this happens when fork confirmations reach >= 3
+func (bc *Blockchain) handleChainReorg(fork *Fork) error {
+	if fork.IsLongestChain {
+		// remove the forkPair from the fork slice ;
+		bc.ForkSlice.RemoveForkPair(bc.ForkSlice[bc.ForkSlice.FindForkPairId(fork)])
+	}
+	// the winning chian is one in the processing queue
+	// put the blocks which are to be removed in an array
+	// iterate thru each block and revert its tx and remove it from blockstore and headers
+	// remove the forkPair
+	forkPair := bc.ForkSlice[bc.ForkSlice.FindForkPairId(fork)]
+	var toBeRemovedFork *Fork
+	var toBeRemovedBlocks []*Block
+	if forkPair.Forks[0] == fork {
+		toBeRemovedFork = forkPair.Forks[1]
+	} else {
+		toBeRemovedFork = forkPair.Forks[0]
+	}
+	//bock from which the fork started not the one that caused the fork
+	// forkingBlock, _ := bc.GetBlockByHash(toBeRemovedFork.ForkingBlock)
+	// forkingBlock.NextBlocks[0] will be the longestChain so [1] will be the forked block
+	// startingBlock := forkingBlock.NextBlocks[1]
+	// forkChainTipBlock, _ := forkPair.GetBlock(toBeRemovedFork.ChainTip)
+	toBeRemovedBlocks = toBeRemovedFork.blocks
+
+	// process each block; revert tx; remove from blockstore and headers
+	for _, block := range toBeRemovedBlocks {
+		for _, tx := range block.Transactions {
+			go bc.revertTx(tx)
+			delete(bc.txStore, tx.hash)
+			// sending this orphaned tx to server's mempool
+			bc.txCh <- tx
+		}
+
+		// removing the block from the Headers, blockStore, blockSToreHeihgt
+
+		//removing the block from the headers
+		for i, header := range bc.headers {
+			if header == block.Header {
+				bc.headers = append(bc.headers[:i], bc.headers[i+1:]...)
+				break
+			}
+		}
+		// removing the block from the blockStore
+		delete(bc.blockStore, block.Hash(BlockHasher{}))
+
+		//removing the block from the blockStoreHeight
+		delete(bc.blockStoreHeight, block.Header.Height)
+	}
+
+	bc.ForkSlice.RemoveForkPair(forkPair)
+
+	return nil
+}
+
 // checks to see if the new incoming block is causing any forks in the chain
 // or is attaching itself to a particular forked block etc
 // / @dev returns true if the block is causing a fork or attaching itself to a fork
@@ -264,7 +333,8 @@ func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 		bc.ForkSlice[bc.forkCount] = NewForkPair(forks)
 		// because this incoming block is causing the fork; its not part of the longest chain
 		// hence needs to be added to the processingQueue of hte fork
-		bc.ForkSlice[bc.forkCount].AddBlock(b)
+		bc.ForkSlice[bc.forkCount].AddBlockToProcessingQ(b)
+		bc.ForkSlice[bc.forkCount].AddBlock(forkingFork, b)
 
 		bc.forkLock.Unlock()
 
@@ -281,10 +351,15 @@ func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 
 	fork.Confirmations++
 
-	// TODO: chain reorg
+	// CHAIN REORG
+	if fork.Confirmations >= 3 {
+		bc.handleChainReorg(fork)
+		return FORK_IN_LONGEST_CHAIN
+	}
 
 	/// updating the chaintip of the fork
-	blockAtForkTip, _ := bc.GetBlockByHash(fork.ChainTip)
+	forkPair := bc.ForkSlice[bc.ForkSlice.FindForkPairId(fork)]
+	blockAtForkTip, _ := forkPair.GetBlock(fork.ChainTip)
 
 	blockAtForkTip.NextBlocks = append(blockAtForkTip.NextBlocks, b)
 	fork.ChainTip = b.Hash(BlockHasher{})
@@ -296,7 +371,8 @@ func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 	}
 
 	forkId := bc.ForkSlice.FindForkPairId(fork)
-	bc.ForkSlice[forkId].AddBlock(b)
+	bc.ForkSlice[forkId].AddBlockToProcessingQ(b)
+	bc.ForkSlice[forkId].AddBlock(fork, b)
 
 	return FORK_NOT_IN_LONGEST_CHAIN
 }
@@ -319,15 +395,13 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	fmt.Printf("Account state : %+v\n", bc.accountState.accounts)
 	fmt.Println("==========>>>ACCOUNT STATE<<<<<===========")
 
-	bc.lock.Lock()
-	bc.headers = append(bc.headers, b.Header)
 	// bc.block itself is the head ptr
 	// adding the new block to the next block of the current block
 
 	var forkHandlerRes ReturnTypeForkHandler
 	//handle forks if present
 	// won;t be present for the genesis block
-	if b.Header.Height > 1 {
+	if b.Header.Height != 0 {
 		forkHandlerRes = bc.handleAndTrackForks(b)
 	}
 	// if the block is not a fork then we can add the block normally to the ll
@@ -344,6 +418,9 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 		bc.block = b
 	}
 
+	bc.lock.Lock()
+
+	bc.headers = append(bc.headers, b.Header)
 	//adding block to the blockStore
 	bc.blockStore[b.Hash(BlockHasher{})] = b
 	bc.blockStoreHeight[b.Header.Height+1] = b

@@ -214,6 +214,40 @@ func TestForkBlockAddition(t *testing.T) {
 	assert.Equal(t, forkingBlock.Header.PrevBlockHash, block.Header.PrevBlockHash)
 }
 
+func TestChainReorg(t *testing.T) {
+	gB, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
+	prevHash := getPrevBlockHash(t, bc, uint32(1))
+	block := randomBlockWithSignature(t, uint32(1), (prevHash))
+	err := bc.AddBlock(block)
+	fmt.Printf("hash of the head ptr in bc is %v\n", bc.block.Hash(BlockHasher{}))
+	fmt.Printf("prev hash of the block is %v\n", block.Header.PrevBlockHash)
+	assert.Nil(t, err)
+	forkingBlock := randomBlockWithSignatureAndPrevBlock(t, uint32(1), (prevHash), gB)
+	fmt.Printf("prev hash of the block is %v\n", forkingBlock.Header.PrevBlockHash)
+	err1 := bc.AddBlock(forkingBlock)
+	assert.Nil(t, err1)
+	assert.Equal(t, forkingBlock.Header.PrevBlockHash, block.Header.PrevBlockHash)
+
+	//
+	BlockToLongestChain1 := randomBlockWithSignatureAndPrevBlock(t, uint32(2), block.Hash(BlockHasher{}), block)
+	assert.Nil(t, bc.AddBlock(BlockToLongestChain1))
+
+	BlockToLongestChain2 := randomBlockWithSignatureAndPrevBlock(t, uint32(3), BlockToLongestChain1.Hash(BlockHasher{}), BlockToLongestChain1)
+	assert.Nil(t, bc.AddBlock(BlockToLongestChain2))
+
+	blockToFork1 := randomBlockWithSignatureAndPrevBlock(t, uint32(2), forkingBlock.Hash(BlockHasher{}), forkingBlock)
+	assert.Nil(t, bc.AddBlock(blockToFork1))
+
+	blockToFork2 := randomBlockWithSignatureAndPrevBlock(t, uint32(3), blockToFork1.Hash(BlockHasher{}), blockToFork1)
+	assert.Nil(t, bc.AddBlock(blockToFork2))
+
+	blockToFork3 := randomBlockWithSignatureAndPrevBlock(t, uint32(4), blockToFork2.Hash(BlockHasher{}), blockToFork2)
+	assert.Nil(t, bc.AddBlock(blockToFork3))
+
+	assert.Equal(t, bc.block, blockToFork3)
+
+}
+
 func TestTargetValueForBlock(t *testing.T) {
 	bc := newBlockchainWithGenesis(t)
 	lenB := HEIGHT_DIVISOR*2 + 1
@@ -256,6 +290,39 @@ func TestMineBlockFunc(t *testing.T) {
 	assert.Nil(t, err1)
 }
 
+func TestTxRevertion(t *testing.T) {
+	bc := newBlockchainWithGenesis(t)
+	signer := crypto_lib.GeneratePrivateKey()
+
+	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))
+
+	privKeyBob := crypto_lib.GeneratePrivateKey()
+	privKeyAlice := crypto_lib.GeneratePrivateKey()
+	amount := uint64(80)
+
+	accountBob := bc.accountState.CreateAccount(privKeyBob.PublicKey().Address())
+	accountAlice := bc.accountState.CreateAccount(privKeyAlice.PublicKey().Address())
+	accountBob.Balance = uint64(100)
+
+	tx := NewTransaction([]byte{})
+	tx.From = privKeyBob.PublicKey()
+	tx.To = privKeyAlice.PublicKey()
+	tx.Value = amount
+	tx.Sign(privKeyBob)
+
+	block.AddTx(tx)
+	assert.Nil(t, block.Sign(signer))
+	assert.Nil(t, bc.AddBlock(block))
+
+	assert.Equal(t, accountBob.Balance, uint64(20))
+	assert.Equal(t, accountAlice.Balance, uint64(80))
+
+	assert.Nil(t, bc.revertTx(tx))
+
+	assert.Equal(t, accountBob.Balance, uint64(100))
+	assert.Equal(t, accountAlice.Balance, uint64(0))
+}
+
 func newBlockchainWithGenesis(t *testing.T) *Blockchain {
 	block := genesisBlockWithSig(t, 1, core_types.Hash{})
 	logger := log.NewLogfmtLogger(os.Stderr)
@@ -265,7 +332,7 @@ func newBlockchainWithGenesis(t *testing.T) *Blockchain {
 }
 
 func newBlockchainWithGenesisAndReturnsGenesis(t *testing.T) (*Block, *Blockchain) {
-	block := genesisBlockWithSig(t, 1, core_types.Hash{})
+	block := genesisBlockWithSig(t, 0, core_types.Hash{})
 	logger := log.NewLogfmtLogger(os.Stderr)
 	bc, err := NewBlockchain(block, logger)
 	assert.Nil(t, err)

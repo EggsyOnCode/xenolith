@@ -48,6 +48,14 @@ func NewTransaction(data []byte) *Transaction {
 	}
 }
 
+
+func (tx *Transaction) Revert() error {
+	temp := tx.From
+	tx.From = tx.To
+	tx.To =  temp
+	return nil
+}
+
 // making the Tx hasher implementation generic
 func (t *Transaction) Hash(h Hasher[*Transaction]) core_types.Hash {
 	if t.hash.IsZero() {
