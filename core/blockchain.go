@@ -20,6 +20,14 @@ const (
 	TARGET_GENESIS  = 0x00ffff0000000000000000000000000000000000000000000000000000
 )
 
+type ReturnTypeForkHandler byte
+
+const (
+	FORK_IN_LONGEST_CHAIN     ReturnTypeForkHandler = 0x1
+	FORK_NOT_IN_LONGEST_CHAIN ReturnTypeForkHandler = 0x2
+	NOT_FORKING               ReturnTypeForkHandler = 0x3
+)
+
 type Blockchain struct {
 	Version uint32
 	logger  log.Logger
@@ -28,9 +36,10 @@ type Blockchain struct {
 	headers []*Header
 	// blocks  []*Block
 
+	ChainTip  *Block
 	forkLock  *sync.RWMutex
 	forkCount uint32
-	core_types.ForkSlice
+	ForkSlice
 	//since blochchain is a linked list of blocks, we just need to first genesis block and we can accses the rest of the link using it
 	block            *Block
 	blockStore       map[core_types.Hash]*Block
@@ -70,8 +79,9 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		logger:        logger,
 		Version:       1,
 		// blocks:           make([]*Block, 1),
+		ChainTip:         genesis,
 		block:            genesis,
-		ForkSlice:        make(core_types.ForkSlice),
+		ForkSlice:        make(ForkSlice),
 		forkLock:         &sync.RWMutex{},
 		forkCount:        0,
 		blockStore:       make(map[core_types.Hash]*Block),
@@ -228,48 +238,67 @@ func (bc *Blockchain) handleTx(tx *Transaction) error {
 
 // checks to see if the new incoming block is causing any forks in the chain
 // or is attaching itself to a particular forked block etc
-func (bc *Blockchain) handleAndTrackForks(b *Block) (bool, error) {
+// / @dev returns true if the block is causing a fork or attaching itself to a fork
+func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 	// 1st check: if the block is causing a fork --> insertion in forkSlice
 	// false indicates that the block is not causing a fork or becoming part of a fork
 	if len(b.PrevBlock.NextBlocks) >= 1 {
-		forkingFork := &core_types.Fork{
-			ChainTip:      b.Hash(BlockHasher{}),
-			ForkingBlock:  b.PrevBlock.Hash(BlockHasher{}),
-			Confirmations: 0,
+		forkingFork := &Fork{
+			ChainTip:       b.Hash(BlockHasher{}),
+			ForkingBlock:   b.PrevBlock.Hash(BlockHasher{}),
+			Confirmations:  0,
+			IsLongestChain: false,
 		}
 
-		competitorFork := &core_types.Fork{
-			ChainTip:      b.PrevBlock.NextBlocks[0].Hash(BlockHasher{}),
-			ForkingBlock:  b.PrevBlock.Hash(BlockHasher{}),
-			Confirmations: 0,
+		competitorFork := &Fork{
+			ChainTip:       b.PrevBlock.NextBlocks[0].Hash(BlockHasher{}),
+			ForkingBlock:   b.PrevBlock.Hash(BlockHasher{}),
+			Confirmations:  0,
+			IsLongestChain: true,
 		}
 
-		forks := []*core_types.Fork{forkingFork, competitorFork}
+		forks := []*Fork{forkingFork, competitorFork}
 
 		bc.forkLock.Lock()
 		bc.forkCount++
-		bc.ForkSlice[bc.forkCount] = forks
+		bc.ForkSlice[bc.forkCount] = NewForkPair(forks)
+		// because this incoming block is causing the fork; its not part of the longest chain
+		// hence needs to be added to the processingQueue of hte fork
+		bc.ForkSlice[bc.forkCount].AddBlock(b)
+
 		bc.forkLock.Unlock()
 
-		return true, nil
+		return FORK_NOT_IN_LONGEST_CHAIN
 	}
 	// 2nd check: if the block is attaching itself to a forked block (a block in a fork chain temp or otherwise)--> update the forkSlice
 
+	//checking if the incoming block means to attach itself to a fork
+	// returns errr if its not a doing that
 	fork, err := bc.ForkSlice.FindBlock(b.Header.PrevBlockHash)
 	if err != nil {
-		return false, err
+		return NOT_FORKING
 	}
 
 	fork.Confirmations++
-	blockAtForkTip, err := bc.GetBlockByHash(fork.ChainTip)
-	if err != nil {
-		return true, err
-	}
+
+	// TODO: chain reorg
+
+	/// updating the chaintip of the fork
+	blockAtForkTip, _ := bc.GetBlockByHash(fork.ChainTip)
 
 	blockAtForkTip.NextBlocks = append(blockAtForkTip.NextBlocks, b)
 	fork.ChainTip = b.Hash(BlockHasher{})
 
-	return true, nil
+	//check if the incoming block is attaching itself to fork with the longest chain or not
+	// if YES; that means it will be added to the blockStore and hence the chain ; otehrwise; it will be added to the processing queue
+	if fork.IsLongestChain {
+		return FORK_IN_LONGEST_CHAIN
+	}
+
+	forkId := bc.ForkSlice.FindForkPairId(fork)
+	bc.ForkSlice[forkId].AddBlock(b)
+
+	return FORK_NOT_IN_LONGEST_CHAIN
 }
 
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
@@ -295,13 +324,22 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	// bc.block itself is the head ptr
 	// adding the new block to the next block of the current block
 
-	isFork := true
+	var forkHandlerRes ReturnTypeForkHandler
 	//handle forks if present
+	// won;t be present for the genesis block
 	if b.Header.Height > 1 {
-		isFork, _ = bc.handleAndTrackForks(b)
+		forkHandlerRes = bc.handleAndTrackForks(b)
 	}
 	// if the block is not a fork then we can add the block normally to the ll
-	if !isFork {
+	// if the block attaching itself to non-dominant fork then we can add the block to the processing queue
+	// and hence do nothing here
+	// if the block is attaching itself to the longestChainFork then we can add the block to the chain
+	switch forkHandlerRes {
+	case FORK_NOT_IN_LONGEST_CHAIN:
+		// do nothing
+		return nil
+	default:
+		//bc.block rep the ll of blocks
 		bc.block.NextBlocks = append(bc.block.NextBlocks, b)
 		bc.block = b
 	}
@@ -310,8 +348,8 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	bc.blockStore[b.Hash(BlockHasher{})] = b
 	bc.blockStoreHeight[b.Header.Height+1] = b
 	bc.lock.Unlock()
-
-	bc.store.Put(b)
+	//updating the chainTip
+	bc.ChainTip = b
 
 	bc.logger.Log(
 		"msg", "added new block to the chain",

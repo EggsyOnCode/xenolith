@@ -201,14 +201,17 @@ func TestGetBlock(t *testing.T) {
 
 func TestForkBlockAddition(t *testing.T) {
 	gB, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
-	fmt.Print(bc)
 	prevHash := getPrevBlockHash(t, bc, uint32(1))
 	block := randomBlockWithSignature(t, uint32(1), (prevHash))
 	err := bc.AddBlock(block)
+	fmt.Printf("hash of the head ptr in bc is %v\n", bc.block.Hash(BlockHasher{}))
+	fmt.Printf("prev hash of the block is %v\n", block.Header.PrevBlockHash)
 	assert.Nil(t, err)
-	forkingBlock := randomBlockWithSignatureAndPrevBlock(t, uint32(2), (prevHash), gB)
+	forkingBlock := randomBlockWithSignatureAndPrevBlock(t, uint32(1), (prevHash), gB)
+	fmt.Printf("prev hash of the block is %v\n", forkingBlock.Header.PrevBlockHash)
 	err1 := bc.AddBlock(forkingBlock)
 	assert.Nil(t, err1)
+	assert.Equal(t, forkingBlock.Header.PrevBlockHash, block.Header.PrevBlockHash)
 }
 
 func TestTargetValueForBlock(t *testing.T) {
@@ -233,7 +236,7 @@ func TestTargetValueForBlock(t *testing.T) {
 	assert.NotEmpty(t, expectedTarget)
 }
 
-func TestMineBlockFunc(t *testing.T){
+func TestMineBlockFunc(t *testing.T) {
 	bc := newBlockchainWithGenesis(t)
 	lenB := HEIGHT_DIVISOR*2 + 1
 	for i := 1; i < lenB; i++ {

@@ -22,26 +22,31 @@ func NewBlockValidator(bc *Blockchain) *BlockValidator {
 func (v *BlockValidator) ValidateBlock(b *Block) error {
 	// Validate block
 	// if the height of the proposed block is not less than the current height, return an error
+	var block *Block;
 	if v.bc.HasBlock(b.Header.Height) {
-		// return fmt.Errorf("Block with height %v and hash %v already exists", b.Header.Height, b.Hash(BlockHasher{}))
-		return ErrBlockKnown
+		block, _ = v.bc.GetBlock(b.Header.Height)
+		// if it returns false then that means a fork has been detected
+		if block.Header.PrevBlockHash != b.Header.PrevBlockHash {
+			// return fmt.Errorf("Block with height %v and hash %v already exists", b.Header.Height, b.Hash(BlockHasher{}))
+			return ErrBlockKnown
+		}
 	}
 
 	///the height of the proposed block should be one greater than the current height
-	if b.Header.Height != v.bc.Height()+1 {
+	if b.Header.Height != v.bc.Height()+1 && (block.Header.PrevBlockHash != b.Header.PrevBlockHash) {
 		return fmt.Errorf("block (%s) with height (%d) is too high => current height (%d)", b.Hash(BlockHasher{}), b.Header.Height, v.bc.Height())
 	}
 
 	//getting headers for current block
-	prevHash, err := v.bc.GetHeaders(b.Header.Height - 1)
+	prevBlockHeader, err := v.bc.GetHeaders(b.Header.Height - 1)
 	if err != nil {
 		return err
 	}
 
 	//the previous block hash of the proposed block should be equal to the hash of the last block in the blockchain
-	hash := BlockHasher{}.Hash(prevHash)
+	hash := BlockHasher{}.Hash(prevBlockHeader)
 	hashOfHeaderBlock := v.bc.block.Hash(BlockHasher{})
-	// reason for dual assertion is that; in a forking scenario 
+	// reason for dual assertion is that; in a forking scenario
 	// the block headers and the blockchain linked list could go out of sync
 	if hash != b.Header.PrevBlockHash && hashOfHeaderBlock != b.Header.PrevBlockHash {
 		return fmt.Errorf("Block with height %v and hash %v has a different previous block hash %v", b.Header.Height, b.Hash(BlockHasher{}), b.Header.PrevBlockHash)
