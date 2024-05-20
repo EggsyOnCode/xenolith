@@ -63,7 +63,7 @@ type ForkSlice map[uint32]*ForkPair
 // total Chaintips: 2x of the number of forks Id
 
 // returns which fork a block belongs to
-func (f *ForkSlice) FindBlock(hash core_types.Hash) (*Fork, error) {
+func (f *ForkSlice) FindBlockFork(hash core_types.Hash) (*Fork, error) {
 	for _, forks := range *f {
 		for _, fork := range forks.Forks {
 			if fork.ChainTip == hash {
@@ -72,6 +72,16 @@ func (f *ForkSlice) FindBlock(hash core_types.Hash) (*Fork, error) {
 		}
 	}
 	return nil, fmt.Errorf("block not found in the fork slice")
+}
+
+// checks if a block exists in any of the forkPairs
+func (f *ForkSlice) FindBlock(hash core_types.Hash) (*Block, error) {
+	for _, forkPair := range *f {
+		if block, ok := forkPair.blockStore[hash]; ok {
+			return block, nil
+		}
+	}
+	return nil, fmt.Errorf("block not found in the blocStore")
 }
 
 func (f *ForkSlice) FindForkPairId(fo *Fork) uint32 {

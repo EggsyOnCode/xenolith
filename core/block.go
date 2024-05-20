@@ -57,6 +57,7 @@ func NewBlock(h *Header, txx []*Transaction) *Block {
 	return &Block{
 		Header:       h,
 		Transactions: txx,
+		NextBlocks:   make([]*Block, 0),
 	}
 }
 

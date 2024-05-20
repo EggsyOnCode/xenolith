@@ -41,9 +41,10 @@ func randomBlockWithSignatureAndPrevBlock(t *testing.T, height uint32, prevHash 
 	//generating a private key
 	priv := crypto_lib.GeneratePrivateKey()
 	block := &Block{
-		Header:    header,
-		Validator: priv.PublicKey(),
-		PrevBlock: b,
+		Header:     header,
+		Validator:  priv.PublicKey(),
+		PrevBlock:  b,
+		NextBlocks: make([]*Block, 0),
 	}
 	tx := randomTxWithSignature(t)
 	fmt.Printf("validator is %v\n", block.Validator)
@@ -103,9 +104,10 @@ func genesisBlockWithSig(t *testing.T, height uint32, prevHash core_types.Hash) 
 	//generating a private key
 	priv := crypto_lib.GeneratePrivateKey()
 	block := &Block{
-		Header:    header,
-		Validator: priv.PublicKey(),
-		PrevBlock: &Block{},
+		Header:     header,
+		Validator:  priv.PublicKey(),
+		PrevBlock:  &Block{},
+		NextBlocks: make([]*Block, 0),
 	}
 	tx := randomTxWithSignature(t)
 	fmt.Printf("validator is %v\n", block.Validator)

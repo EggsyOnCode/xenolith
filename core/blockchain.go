@@ -260,6 +260,7 @@ func (bc *Blockchain) handleChainReorg(fork *Fork) error {
 	// put the blocks which are to be removed in an array
 	// iterate thru each block and revert its tx and remove it from blockstore and headers
 	// remove the forkPair
+
 	forkPair := bc.ForkSlice[bc.ForkSlice.FindForkPairId(fork)]
 	var toBeRemovedFork *Fork
 	var toBeRemovedBlocks []*Block
@@ -269,19 +270,44 @@ func (bc *Blockchain) handleChainReorg(fork *Fork) error {
 		toBeRemovedFork = forkPair.Forks[0]
 	}
 	//bock from which the fork started not the one that caused the fork
-	// forkingBlock, _ := bc.GetBlockByHash(toBeRemovedFork.ForkingBlock)
+	forkingBlock, _ := bc.GetBlockByHash(toBeRemovedFork.ForkingBlock)
 	// forkingBlock.NextBlocks[0] will be the longestChain so [1] will be the forked block
-	// startingBlock := forkingBlock.NextBlocks[1]
-	// forkChainTipBlock, _ := forkPair.GetBlock(toBeRemovedFork.ChainTip)
-	toBeRemovedBlocks = toBeRemovedFork.blocks
+	startingBlock := forkingBlock.NextBlocks[0]
 
+	forkChainTipBlock := bc.block
+
+	// toBeRemoved Block exists on Chain so normalGetters used
+	toBeRemovedBlocks = append(toBeRemovedBlocks, startingBlock)
+
+	for {
+		// Ensure startingBlock has NextBlocks before accessing
+		if len(startingBlock.NextBlocks) == 0 {
+			fmt.Printf("No next blocks found for block %v\n", startingBlock.Hash(BlockHasher{}))
+			break
+		}
+
+		nextBlock := startingBlock.NextBlocks[0]
+		toBeRemovedBlocks = append(toBeRemovedBlocks, nextBlock)
+
+		// Update startingBlock
+		startingBlock = nextBlock
+
+		// Check if we reached the chain tip block
+		if startingBlock == forkChainTipBlock {
+			break
+		}
+	}
+
+	// forkingBlock, _ := bc.GetBlockByHash(forkingBlockHash)
+	// forkingBlock.NextBlocks[0] = toBeRemovedBlocks[0]
 	// process each block; revert tx; remove from blockstore and headers
 	for _, block := range toBeRemovedBlocks {
 		for _, tx := range block.Transactions {
+			orgTx := tx
 			go bc.revertTx(tx)
 			delete(bc.txStore, tx.hash)
 			// sending this orphaned tx to server's mempool
-			bc.txCh <- tx
+			bc.txCh <- orgTx
 		}
 
 		// removing the block from the Headers, blockStore, blockSToreHeihgt
@@ -297,7 +323,18 @@ func (bc *Blockchain) handleChainReorg(fork *Fork) error {
 		delete(bc.blockStore, block.Hash(BlockHasher{}))
 
 		//removing the block from the blockStoreHeight
-		delete(bc.blockStoreHeight, block.Header.Height)
+		delete(bc.blockStoreHeight, block.Header.Height + 1)
+
+	}
+
+	// attaching the winning fork to the forkingBlock ; the block from which the fork started
+	//re init the nextBlocks of the forkingBlock
+	forkingBlock.NextBlocks = []*Block{}
+	//putting the pointer rolled back to the forkingBlock from where the chain history diverged
+	bc.block = forkingBlock
+	for _, block := range fork.blocks {
+		block.NextBlocks = []*Block{}
+		bc.addBlockWithoutValidation(block)
 	}
 
 	bc.ForkSlice.RemoveForkPair(forkPair)
@@ -335,6 +372,7 @@ func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 		// hence needs to be added to the processingQueue of hte fork
 		bc.ForkSlice[bc.forkCount].AddBlockToProcessingQ(b)
 		bc.ForkSlice[bc.forkCount].AddBlock(forkingFork, b)
+		bc.ForkSlice[bc.forkCount].AddBlock(competitorFork, b.PrevBlock.NextBlocks[0])
 
 		bc.forkLock.Unlock()
 
@@ -344,7 +382,12 @@ func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 
 	//checking if the incoming block means to attach itself to a fork
 	// returns errr if its not a doing that
-	fork, err := bc.ForkSlice.FindBlock(b.Header.PrevBlockHash)
+	_, err := bc.ForkSlice.FindBlock(b.Header.PrevBlockHash)
+	if err != nil {
+		return NOT_FORKING
+	}
+
+	fork, err := bc.ForkSlice.FindBlockFork(b.Header.PrevBlockHash)
 	if err != nil {
 		return NOT_FORKING
 	}
@@ -378,6 +421,31 @@ func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 }
 
 func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
+	// bc.block itself is the head ptr
+	// adding the new block to the next block of the current block
+
+	var forkHandlerRes ReturnTypeForkHandler
+	//handle forks if present
+	// won;t be present for the genesis block
+	if b.Header.Height != 0 {
+		forkHandlerRes = bc.handleAndTrackForks(b)
+
+		// if the block is not a fork then we can add the block normally to the ll
+		// if the block attaching itself to non-dominant fork then we can add the block to the processing queue
+		// and hence do nothing here
+		// if the block is attaching itself to the longestChainFork then we can add the block to the chain
+		switch forkHandlerRes {
+		case FORK_NOT_IN_LONGEST_CHAIN:
+			// do nothing
+			return nil
+		default:
+			//bc.block rep the ll of blocks
+			bc.block.NextBlocks = append(bc.block.NextBlocks, b)
+			bc.block = b
+		}
+	}
+
+	// state changes will  only be of those blocks which are part of the longest chain
 	bc.stateLock.Lock()
 
 	//run the block data i.e the code on the VM
@@ -394,29 +462,6 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 	fmt.Println("==========>>>ACCOUNT STATE<<<<<===========")
 	fmt.Printf("Account state : %+v\n", bc.accountState.accounts)
 	fmt.Println("==========>>>ACCOUNT STATE<<<<<===========")
-
-	// bc.block itself is the head ptr
-	// adding the new block to the next block of the current block
-
-	var forkHandlerRes ReturnTypeForkHandler
-	//handle forks if present
-	// won;t be present for the genesis block
-	if b.Header.Height != 0 {
-		forkHandlerRes = bc.handleAndTrackForks(b)
-	}
-	// if the block is not a fork then we can add the block normally to the ll
-	// if the block attaching itself to non-dominant fork then we can add the block to the processing queue
-	// and hence do nothing here
-	// if the block is attaching itself to the longestChainFork then we can add the block to the chain
-	switch forkHandlerRes {
-	case FORK_NOT_IN_LONGEST_CHAIN:
-		// do nothing
-		return nil
-	default:
-		//bc.block rep the ll of blocks
-		bc.block.NextBlocks = append(bc.block.NextBlocks, b)
-		bc.block = b
-	}
 
 	bc.lock.Lock()
 

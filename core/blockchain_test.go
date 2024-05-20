@@ -216,35 +216,70 @@ func TestForkBlockAddition(t *testing.T) {
 
 func TestChainReorg(t *testing.T) {
 	gB, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
+	bc.SetTxChan(make(chan *Transaction, 1024))
+	assert.Equal(t, bc.block, gB)
 	prevHash := getPrevBlockHash(t, bc, uint32(1))
-	block := randomBlockWithSignature(t, uint32(1), (prevHash))
+	block := randomBlockWithSignatureAndPrevBlock(t, uint32(1), (prevHash), gB)
 	err := bc.AddBlock(block)
+	assert.Equal(t, gB.NextBlocks[0], block)
 	fmt.Printf("hash of the head ptr in bc is %v\n", bc.block.Hash(BlockHasher{}))
 	fmt.Printf("prev hash of the block is %v\n", block.Header.PrevBlockHash)
 	assert.Nil(t, err)
+	//block that causes the fork
 	forkingBlock := randomBlockWithSignatureAndPrevBlock(t, uint32(1), (prevHash), gB)
 	fmt.Printf("prev hash of the block is %v\n", forkingBlock.Header.PrevBlockHash)
 	err1 := bc.AddBlock(forkingBlock)
 	assert.Nil(t, err1)
 	assert.Equal(t, forkingBlock.Header.PrevBlockHash, block.Header.PrevBlockHash)
+	assert.Equal(t, block.Hash(BlockHasher{}), forkingBlock.PrevBlock.NextBlocks[0].Hash(BlockHasher{}))
+	_, err3 := bc.ForkSlice.FindBlock(block.Hash(BlockHasher{}))
+	assert.Nil(t, err3)
 
-	//
 	BlockToLongestChain1 := randomBlockWithSignatureAndPrevBlock(t, uint32(2), block.Hash(BlockHasher{}), block)
+
 	assert.Nil(t, bc.AddBlock(BlockToLongestChain1))
+	assert.Equal(t, block.NextBlocks[0], BlockToLongestChain1)
 
 	BlockToLongestChain2 := randomBlockWithSignatureAndPrevBlock(t, uint32(3), BlockToLongestChain1.Hash(BlockHasher{}), BlockToLongestChain1)
 	assert.Nil(t, bc.AddBlock(BlockToLongestChain2))
+	assert.Equal(t, BlockToLongestChain1.NextBlocks[0], BlockToLongestChain2)
+	assert.Equal(t, bc.block, BlockToLongestChain2)
+	// _, err2 := bc.ForkSlice.FindBlock(BlockToLongestChain2.Hash(BlockHasher{}))
+	// assert.Nil(t, err2)
 
 	blockToFork1 := randomBlockWithSignatureAndPrevBlock(t, uint32(2), forkingBlock.Hash(BlockHasher{}), forkingBlock)
 	assert.Nil(t, bc.AddBlock(blockToFork1))
+	assert.Equal(t, forkingBlock.NextBlocks[0], blockToFork1)
 
 	blockToFork2 := randomBlockWithSignatureAndPrevBlock(t, uint32(3), blockToFork1.Hash(BlockHasher{}), blockToFork1)
 	assert.Nil(t, bc.AddBlock(blockToFork2))
+	assert.Equal(t, blockToFork1.NextBlocks[0], blockToFork2)
+	assert.Equal(t, bc.block, BlockToLongestChain2)
 
 	blockToFork3 := randomBlockWithSignatureAndPrevBlock(t, uint32(4), blockToFork2.Hash(BlockHasher{}), blockToFork2)
 	assert.Nil(t, bc.AddBlock(blockToFork3))
 
+	fmt.Printf("bc height %v\n", bc.Height())
+
 	assert.Equal(t, bc.block, blockToFork3)
+	blockAtH3, _ := bc.GetBlock(bc.Height())
+	assert.Equal(t, blockAtH3, bc.block)
+
+	blockAtH2, _ := bc.GetBlock(3)
+	assert.Equal(t, blockAtH2, blockToFork2)
+
+	blockAtH1, _ := bc.GetBlock(2)
+	assert.Equal(t, blockAtH1, blockToFork1)
+
+	//block that originally caused the fork
+	blockAtH0, _ := bc.GetBlock(1)
+	assert.Equal(t, blockAtH0, forkingBlock)
+
+	assert.Equal(t, forkingBlock.PrevBlock, gB)
+	assert.Equal(t, gB.NextBlocks[0], forkingBlock)
+
+	genesisB, _ := bc.GetBlock(0)
+	assert.Equal(t, genesisB, gB)
 
 }
 
