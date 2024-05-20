@@ -17,7 +17,7 @@ const (
 	HEIGHT_DIVISOR = 5
 	// 60 sec
 	AVG_TARGET_TIME = 1 * 60
-	TARGET_GENESIS  = 0x00ffff0000000000000000000000000000000000000000000000000000
+	TARGET_GENESIS  = "0x00ffff0000000000000000000000000000000000000000000000000000"
 )
 
 type ReturnTypeForkHandler byte
@@ -58,7 +58,7 @@ type Blockchain struct {
 	//to store the state of all the smart contracts on the blockchain
 	//TODO implement an interface for the State
 	contractState *State
-	target        *big.Int
+	Target        *big.Int
 	// a channel shared between blockchain and server for sharing orphaned Tx into server's mempool
 	txCh chan *Transaction
 }
@@ -94,6 +94,9 @@ func NewBlockchain(genesis *Block, logger log.Logger) (*Blockchain, error) {
 		accountState:     accountState,
 		stateLock:        sync.RWMutex{},
 	}
+
+	bc.Target = new(big.Int)
+	bc.Target.SetString(TARGET_GENESIS, 0)
 
 	bc.Validator = NewBlockValidator(bc)
 
@@ -486,6 +489,17 @@ func (bc *Blockchain) addBlockWithoutValidation(b *Block) error {
 		"transactions", len(b.Transactions),
 	)
 
+	if b.Header.Height != 0 {
+		if err := bc.MineBlock(b); err != nil {
+			bc.logger.Log(
+				"msg", "error mining block",
+				"hash", b.Hash(BlockHasher{}),
+				"height", b.Header.Height,
+				"transactions", len(b.Transactions),
+			)
+		}
+	}
+
 	return bc.store.Put(b)
 }
 
@@ -537,7 +551,7 @@ func (bc *Blockchain) calcTargetValue(b *Block) (*big.Int, error) {
 
 		b.Header.NBits = targetToCompact(new_target)
 		fmt.Printf("target %064x \n nBit are %v\n", new_target, b.Header.NBits)
-		bc.target = new_target
+		bc.Target = new_target
 		return new_target, nil
 	}
 
@@ -592,31 +606,72 @@ func targetToCompact(target *big.Int) uint32 {
 }
 
 func (bc *Blockchain) MineBlock(b *Block) error {
+	bc.logger.Log("msg", "mining block..")
+
 	var targetForBlock *big.Int
 	var err error
 	if (bc.Height() % HEIGHT_DIVISOR) == 0 {
 		targetForBlock, err = bc.calcTargetValue(b)
+		bc.Target = targetForBlock
 		if err != nil {
 			return err
 		}
+	} else {
+		targetForBlock = bc.Target
+		fmt.Printf("target is %x\n", targetForBlock)
 	}
-	targetForBlock = bc.target
-	bHash := b.HashWithoutCache(BlockHasher{})
-	hashBigInt, _ := new(big.Int).SetString(bHash.String(), 16)
-	for isLowerThanTarget(hashBigInt, targetForBlock) != -1 {
-		nonce := b.Header.Nonce
-		b.Header.Nonce++
-		bHash = b.HashWithoutCache(BlockHasher{})
-		hashBigInt.SetString(bHash.String(), 16)
-		fmt.Printf("trying new combo with nonce %v block hash %s and target %x \n", nonce, bHash.String(), targetForBlock)
+	fmt.Printf("target for block %x\n", targetForBlock)
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	found := false
+
+	numWorkers := 8          // Number of goroutines
+	nonceStep := uint32(1e6) // Nonce range for each worker
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(startNonce uint32) {
+			defer wg.Done()
+			localBlock := *b
+			localBlock.Header.Nonce = startNonce
+			localHashBigInt := new(big.Int)
+
+			for localBlock.Header.Nonce < startNonce+nonceStep {
+				if found {
+					return
+				}
+
+				bHash := localBlock.HashWithoutCache(BlockHasher{})
+				localHashBigInt.SetString(bHash.String(), 16)
+
+				if isLowerThanTarget(localHashBigInt, targetForBlock) == -1 {
+					mu.Lock()
+					if !found {
+						found = true
+						b.Header = localBlock.Header
+						fmt.Printf("block mined with hash %s and target %x \n", bHash, targetForBlock)
+					}
+					mu.Unlock()
+					return
+				}
+				localBlock.Header.Nonce++
+			}
+		}(uint32(i) * nonceStep)
 	}
 
-	// updating timestamp
+	wg.Wait()
+
+	if !found {
+		return fmt.Errorf("failed to mine block within the nonce range")
+	}
+
+	// Updating timestamp
 	b.Header.Timestamp = uint64(time.Now().UnixNano())
 	b.Header.Target = targetForBlock
 	b.Header.NBits = targetToCompact(targetForBlock)
 
-	fmt.Printf("block mined with hash %s and target %x \n", bHash.String(), targetForBlock)
+	fmt.Printf("block mined with hash %s and target %x \n", b.HashWithoutCache(BlockHasher{}), targetForBlock)
 
 	return nil
 }

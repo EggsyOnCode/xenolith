@@ -177,7 +177,7 @@ func (s *Server) validatorLoop() {
 
 	s.Logger.Log("msg", "server validator loop staring...", "blockTime", s.BlockTime)
 	for {
-		//whenver the ticker value is decremented
+		//whenever the ticker value is decremented
 		<-ticker.C
 		if err := s.createNewBlock(); err != nil {
 			s.Logger.Log("msg", "err creating block", "error", err)
@@ -245,6 +245,7 @@ func (s *Server) createNewBlock() error {
 	if err := s.chain.AddBlock(block); err != nil {
 		return err
 	}
+
 
 	return s.broadcastBlock(block)
 }

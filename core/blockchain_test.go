@@ -193,7 +193,8 @@ func TestNBitsToTargetFunc(t *testing.T) {
 }
 
 func TestGetBlock(t *testing.T) {
-	_ , bc := newBlockchainWithGenesisAndReturnsGenesis(t)
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
+	assert.Equal(t, 1, len(bc.headers))
 	lenB := 10
 	for i := 1; i < lenB; i++ {
 		prevHash := getPrevBlockHash(t, bc, uint32(i))
@@ -291,7 +292,7 @@ func TestChainReorg(t *testing.T) {
 }
 
 func TestTargetValueForBlock(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	_ , bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	lenB := HEIGHT_DIVISOR*2 + 1
 	for i := 1; i < lenB; i++ {
 		prevHash := getPrevBlockHash(t, bc, uint32(i))
@@ -313,8 +314,9 @@ func TestTargetValueForBlock(t *testing.T) {
 }
 
 func TestMineBlockFunc(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	lenB := HEIGHT_DIVISOR*2 + 1
+	fmt.Printf("height of hte chain is %v\n", bc.Height())
 	for i := 1; i < lenB; i++ {
 		prevHash := getPrevBlockHash(t, bc, uint32(i))
 		block := randomBlockWithSignature(t, uint32(i), (prevHash))
@@ -393,3 +395,11 @@ func getPrevBlockHash(t *testing.T, bc *Blockchain, height uint32) core_types.Ha
 // 	assert.Nil(t, err)
 // 	assert.Equal(t, block.Header.Height, uint32(1))
 // }
+
+func TestBigInt(t *testing.T) {
+	TARGET_GENESIS := "0x00ffff0000000000000000000000000000000000000000000000000000"
+	b := new(big.Int)
+	b.SetString(TARGET_GENESIS,0)
+	fmt.Printf("b is %.02x\n", b)
+	// assert.Equal(t, 1, 2)
+}
