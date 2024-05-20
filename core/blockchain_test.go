@@ -13,12 +13,12 @@ import (
 )
 
 func TestSendNativeTokenTransferSuccess(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	gB, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	a := bc.accountState
 	// teh validator's priv key
 	signer := crypto_lib.GeneratePrivateKey()
 
-	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))
+	block := randomBlockWithSignatureAndPrevBlock(t, 1, gB.Hash(BlockHasher{}), gB)
 
 	pkAlice := crypto_lib.GeneratePrivateKey()
 	addrAlice := pkAlice.PublicKey().Address()
@@ -48,10 +48,13 @@ func TestSendNativeTokenTransferSuccess(t *testing.T) {
 	assert.Equal(t, bc.accountState.accounts[addrAlice].Balance, uint64(50))
 }
 func TestSendNativeTransferInsufficientBalance(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+
+	gB, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
+	// teh validator's priv key
 	signer := crypto_lib.GeneratePrivateKey()
 
-	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))
+	block := randomBlockWithSignatureAndPrevBlock(t, 1, gB.Hash(BlockHasher{}), gB)
+
 	assert.Nil(t, block.Sign(signer))
 
 	privKeyBob := crypto_lib.GeneratePrivateKey()
@@ -84,12 +87,14 @@ func TestSendNativeTransferInsufficientBalance(t *testing.T) {
 }
 
 func TestSendNativeTokenTransferWithTampering(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
-	a := bc.accountState
+
+	gB, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	// teh validator's priv key
 	signer := crypto_lib.GeneratePrivateKey()
 
-	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))
+	block := randomBlockWithSignatureAndPrevBlock(t, 1, gB.Hash(BlockHasher{}), gB)
+
+	a := bc.accountState
 
 	pkAlice := crypto_lib.GeneratePrivateKey()
 	addrAlice := pkAlice.PublicKey().Address()
@@ -128,22 +133,23 @@ func TestSendNativeTokenTransferWithTampering(t *testing.T) {
 }
 func TestBlockchain(t *testing.T) {
 	//genesis block
-	bc := newBlockchainWithGenesis(t)
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	assert.Equal(t, bc.Height(), uint32(0))
 }
 
 func TestHasBlock(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	assert.True(t, bc.HasBlock(0))
 	assert.False(t, bc.HasBlock(100))
 }
 
 func TestAddBlock(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	lenB := 2
 	for i := 0; i < lenB; i++ {
 		prevHash := getPrevBlockHash(t, bc, uint32(i+1))
-		block := randomBlockWithSignature(t, uint32(i+1), (prevHash))
+		prevBlock, _ := bc.GetBlockByHash(prevHash)
+		block := randomBlockWithSignatureAndPrevBlock(t, uint32(i+1), (prevHash), prevBlock)
 		err := bc.AddBlock(block)
 		assert.Nil(t, err)
 	}
@@ -151,18 +157,19 @@ func TestAddBlock(t *testing.T) {
 	assert.Equal(t, bc.Height(), uint32(lenB))
 	assert.Equal(t, len(bc.headers), lenB+1)
 	//since the current height of the blockchain is 1000, adding a block with height 89 should return an error
-	assert.NotNil(t, bc.AddBlock(randomBlockWithSignature(t, 89, core_types.Hash{})))
+	randBlock := randomBlockWithSignature(t, 89, core_types.GenerateRandomHash(32))
+	assert.NotNil(t, randBlock)
 }
 
 func TestBlockTooHigh(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
-	block := randomBlockWithSignature(t, 1000, core_types.Hash{})
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
+	block := randomBlockWithSignature(t, 1000, core_types.GenerateRandomHash(32))
 	assert.NotNil(t, bc.AddBlock(block))
-	block1 := randomBlockWithSignature(t, 1, core_types.Hash{})
+	block1 := randomBlockWithSignature(t, 1, core_types.GenerateRandomHash(32))
 	assert.NotNil(t, bc.AddBlock(block1))
 }
 func TestGetHeaders(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	for i := 0; i < 2; i++ {
 		prevHash := getPrevBlockHash(t, bc, uint32(i+1))
 		block := randomBlockWithSignature(t, uint32(i+1), prevHash)
@@ -186,7 +193,7 @@ func TestNBitsToTargetFunc(t *testing.T) {
 }
 
 func TestGetBlock(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	_ , bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	lenB := 10
 	for i := 1; i < lenB; i++ {
 		prevHash := getPrevBlockHash(t, bc, uint32(i))
@@ -326,7 +333,7 @@ func TestMineBlockFunc(t *testing.T) {
 }
 
 func TestTxRevertion(t *testing.T) {
-	bc := newBlockchainWithGenesis(t)
+	_, bc := newBlockchainWithGenesisAndReturnsGenesis(t)
 	signer := crypto_lib.GeneratePrivateKey()
 
 	block := randomBlock(t, 1, getPrevBlockHash(t, bc, 1))

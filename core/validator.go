@@ -23,7 +23,7 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 	// Validate block
 	belongsToFork := true
 	// check if the block is meant for a fork
-	_, err := v.bc.ForkSlice.FindBlock(b.PrevBlock.hash)
+	_, err := v.bc.ForkSlice.FindBlock(b.Header.PrevBlockHash)
 	if err != nil {
 		belongsToFork = false
 	}
@@ -36,11 +36,11 @@ func (v *BlockValidator) ValidateBlock(b *Block) error {
 			// return fmt.Errorf("Block with height %v and hash %v already exists", b.Header.Height, b.Hash(BlockHasher{}))
 			return ErrBlockKnown
 		}
-	}
 
-	///the height of the proposed block should be one greater than the current height
-	if b.Header.Height != v.bc.Height()+1 && (block.Header.PrevBlockHash != b.Header.PrevBlockHash) && !belongsToFork {
-		return fmt.Errorf("block (%s) with height (%d) is too high => current height (%d)", b.Hash(BlockHasher{}), b.Header.Height, v.bc.Height())
+		///the height of the proposed block should be one greater than the current height
+		if b.Header.Height != v.bc.Height()+1 && (block.Header.PrevBlockHash != b.Header.PrevBlockHash) && !belongsToFork {
+			return fmt.Errorf("block (%s) with height (%d) is too high => current height (%d)", b.Hash(BlockHasher{}), b.Header.Height, v.bc.Height())
+		}
 	}
 
 	//getting headers for current block

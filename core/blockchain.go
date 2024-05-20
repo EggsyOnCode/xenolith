@@ -323,7 +323,7 @@ func (bc *Blockchain) handleChainReorg(fork *Fork) error {
 		delete(bc.blockStore, block.Hash(BlockHasher{}))
 
 		//removing the block from the blockStoreHeight
-		delete(bc.blockStoreHeight, block.Header.Height + 1)
+		delete(bc.blockStoreHeight, block.Header.Height+1)
 
 	}
 
@@ -348,17 +348,23 @@ func (bc *Blockchain) handleChainReorg(fork *Fork) error {
 func (bc *Blockchain) handleAndTrackForks(b *Block) ReturnTypeForkHandler {
 	// 1st check: if the block is causing a fork --> insertion in forkSlice
 	// false indicates that the block is not causing a fork or becoming part of a fork
-	if len(b.PrevBlock.NextBlocks) >= 1 {
+	var prevBlock *Block
+	if b.PrevBlock != nil {
+		prevBlock = b.PrevBlock
+	} else {
+		prevBlock, _ = bc.GetBlockByHash(b.Header.PrevBlockHash)
+	}
+	if len(prevBlock.NextBlocks) >= 1 {
 		forkingFork := &Fork{
 			ChainTip:       b.Hash(BlockHasher{}),
-			ForkingBlock:   b.PrevBlock.Hash(BlockHasher{}),
+			ForkingBlock:   prevBlock.Hash(BlockHasher{}),
 			Confirmations:  0,
 			IsLongestChain: false,
 		}
 
 		competitorFork := &Fork{
-			ChainTip:       b.PrevBlock.NextBlocks[0].Hash(BlockHasher{}),
-			ForkingBlock:   b.PrevBlock.Hash(BlockHasher{}),
+			ChainTip:       prevBlock.NextBlocks[0].Hash(BlockHasher{}),
+			ForkingBlock:   prevBlock.Hash(BlockHasher{}),
 			Confirmations:  0,
 			IsLongestChain: true,
 		}
@@ -502,7 +508,7 @@ func isLowerThanTarget(x *big.Int, y *big.Int) int {
 	return x.Cmp(y)
 }
 
-// calculates the target and nBits value for the next block
+// calculates the target and NBits value for the next block
 func (bc *Blockchain) calcTargetValue(b *Block) (*big.Int, error) {
 	currentHeight := bc.Height()
 	if currentHeight%HEIGHT_DIVISOR == 0 {
@@ -523,14 +529,14 @@ func (bc *Blockchain) calcTargetValue(b *Block) (*big.Int, error) {
 		}
 		// gives us time Diff in sec
 		timeDiff := (tsCurrentBlock.Header.Timestamp - tsCompBlock)
-		new_target := compactToTarget(tsCurrentBlock.Header.nBits)
+		new_target := compactToTarget(tsCurrentBlock.Header.NBits)
 		timeBigInt := new(big.Int).SetUint64(timeDiff)
 		actualTimeDiffBigInt := new(big.Int).SetUint64(AVG_TARGET_TIME)
 		new_target.Mul(new_target, timeBigInt)
 		new_target.Div(new_target, actualTimeDiffBigInt)
 
-		b.Header.nBits = targetToCompact(new_target)
-		fmt.Printf("target %064x \n nBit are %v\n", new_target, b.Header.nBits)
+		b.Header.NBits = targetToCompact(new_target)
+		fmt.Printf("target %064x \n nBit are %v\n", new_target, b.Header.NBits)
 		bc.target = new_target
 		return new_target, nil
 	}
@@ -608,7 +614,7 @@ func (bc *Blockchain) MineBlock(b *Block) error {
 	// updating timestamp
 	b.Header.Timestamp = uint64(time.Now().UnixNano())
 	b.Header.Target = targetForBlock
-	b.Header.nBits = targetToCompact(targetForBlock)
+	b.Header.NBits = targetToCompact(targetForBlock)
 
 	fmt.Printf("block mined with hash %s and target %x \n", bHash.String(), targetForBlock)
 

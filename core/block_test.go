@@ -36,6 +36,7 @@ func randomBlockWithSignatureAndPrevBlock(t *testing.T, height uint32, prevHash 
 		Height:        height,
 		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
+		NBits:         0x1d00ffff,
 	}
 
 	//generating a private key
@@ -63,16 +64,17 @@ func randomBlockWithSignature(t *testing.T, height uint32, prevHash core_types.H
 		Height:        height,
 		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
-		nBits:         0x1d00ffff,
+		NBits:         0x1d00ffff,
 	}
 
-	header.Target = compactToTarget(header.nBits)
+	header.Target = compactToTarget(header.NBits)
 	//generating a private key
 	priv := crypto_lib.GeneratePrivateKey()
 	block := &Block{
-		Header:    header,
-		Validator: priv.PublicKey(),
-		PrevBlock: &Block{},
+		Header:     header,
+		Validator:  priv.PublicKey(),
+		PrevBlock:  &Block{},
+		NextBlocks: make([]*Block, 0),
 	}
 	tx := randomTxWithSignature(t)
 	fmt.Printf("validator is %v\n", block.Validator)
@@ -91,10 +93,10 @@ func genesisBlockWithSig(t *testing.T, height uint32, prevHash core_types.Hash) 
 		Height:        height,
 		PrevBlockHash: prevHash,
 		Timestamp:     uint64(time.Now().UnixNano()),
-		nBits:         0x1d00ffff,
+		NBits:         0x1d00ffff,
 	}
 
-	header.Target = compactToTarget(header.nBits)
+	header.Target = compactToTarget(header.NBits)
 	// header.Target = new(big.Int)
 	// _, ok := header.Target.SetString("0x00000000FFFF0000000000000000000000000000000000000000000000000000", 16)
 	// if !ok {
